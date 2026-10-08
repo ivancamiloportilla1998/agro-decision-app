@@ -11,7 +11,7 @@ from soil_api import obtener_suelo_soilgrids
 from agro_engine import evaluar_agroclima
 from report_generator import generar_reporte_pdf
 
-st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
+st.set_page_config(page_title="Gestión de Cultivos", page_icon="", layout="wide")
 
 # --- CARGAR ESTILO CSS ---
 def cargar_css(nombre_archivo):
@@ -23,7 +23,7 @@ def cargar_css(nombre_archivo):
 
 cargar_css("style.css")
 
-st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
+st.title("Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío NASA:** Inteligencia geoespacial avanzada, análisis edáfico automático, pisos térmicos y evaluación de riesgos.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
