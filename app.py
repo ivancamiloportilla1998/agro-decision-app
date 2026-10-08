@@ -6,7 +6,7 @@ from streamlit_folium import st_folium
 
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
-st.title(" Sistema de Decisión: Rotación de Cultivos")
+st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío:** Integración de datos satelitales (NASA), suelo local, cultivos y prioridades del agricultor.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
@@ -17,20 +17,22 @@ if 'lon' not in st.session_state:
 if 'lugar' not in st.session_state:
     st.session_state['lugar'] = "Ipiales, Nariño"
 
-# --- 2. FUNCIONES DE GEOCODIFICACIÓN ---
+# --- 2. FUNCIONES DE GEOCODIFICACIÓN MEJORADA ---
 def obtener_nombre_lugar(lat, lon):
     try:
-        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
-        res = requests.get(url, headers={'User-Agent': 'AgroApp/1.0'}).json()
-        if 'address' in res:
-            ciudad = res['address'].get('city', res['address'].get('town', res['address'].get('village', res['address'].get('county', ''))))
-            estado = res['address'].get('state', '')
-            if ciudad and estado:
-                return f"{ciudad}, {estado}"
-            return res.get('display_name', "Zona rural").split(",")[0]
-        return "Ubicación en el mapa"
-    except:
-        return "Ubicación seleccionada"
+        # Se añade zoom=10 para obtener ciudad/municipio y se mejora el User-Agent para evitar bloqueos
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=10"
+        headers = {'User-Agent': 'AgroDecisionApp_Col/2.0 (investigacion_agricola)'}
+        res = requests.get(url, headers=headers).json()
+        
+        if 'display_name' in res:
+            partes = res['display_name'].split(',')
+            if len(partes) > 1:
+                return f"{partes[0].strip()}, {partes[1].strip()}"
+            return partes[0]
+        return "Zona Rural Detectada"
+    except Exception:
+        return "Terreno agrícola (Sin nombre registrado)"
 
 # --- 3. BARRA LATERAL (MENÚ DE UBICACIÓN) ---
 st.sidebar.header("📍 Ubicación del Terreno")
@@ -43,7 +45,7 @@ if metodo == "🔍 Escribir el nombre":
     if st.sidebar.button("Buscar"):
         try:
             url_geo = f"https://nominatim.openstreetmap.org/search?q={nuevo_lugar}&format=json&limit=1"
-            res = requests.get(url_geo, headers={'User-Agent': 'AgroApp/1.0'}).json()
+            res = requests.get(url_geo, headers={'User-Agent': 'AgroDecisionApp_Col/2.0'}).json()
             if res:
                 st.session_state['lat'] = float(res[0]['lat'])
                 st.session_state['lon'] = float(res[0]['lon'])
@@ -65,9 +67,11 @@ elif metodo == "📍 Ingresar coordenadas":
 
 else: # 👆 Clic en el mapa
     st.sidebar.info("Haz clic en cualquier punto del mapa interactivo para seleccionarlo.")
-    # AÑADIDO: Dos campos separados para mostrar el nombre y las coordenadas al mismo tiempo
-    st.sidebar.text_input("Lugar seleccionado:", value=st.session_state['lugar'], disabled=True)
-    st.sidebar.text_input("Coordenadas exactas:", value=f"Lat: {st.session_state['lat']:.4f}, Lon: {st.session_state['lon']:.4f}", disabled=True)
+    
+    # SOLUCIÓN: En lugar de cajas grises, mostramos tarjetas de color resaltadas
+    st.sidebar.markdown("### 📌 Terreno Seleccionado:")
+    st.sidebar.success(f"**Lugar:** {st.session_state['lugar']}")
+    st.sidebar.warning(f"**Latitud:** {st.session_state['lat']:.4f} \n\n**Longitud:** {st.session_state['lon']:.4f}")
 
 LAT = st.session_state['lat']
 LON = st.session_state['lon']
