@@ -4,15 +4,15 @@ import requests
 from streamlit_folium import st_folium
 from streamlit_geolocation import streamlit_geolocation
 
-# Importación de módulos especializados y limpios
+# Importación de módulos especializados
 from geo_service import validar_terreno, buscar_sugerencias
 from map_view import generar_mapa_interactivo
 from nasa_api import obtener_datos_nasa
 from soil_api import obtener_suelo_soilgrids
-from agro_engine import evaluar_agroclima
+from agro_engine import evaluar_agroclima, calcular_impacto_sostenibilidad
 from report_generator import generar_reporte_pdf
 
-st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
+st.set_page_config(page_title="Gestión de Cultivos", page_icon="", layout="wide")
 
 # --- CARGAR ESTILO CSS ---
 def cargar_css(nombre_archivo):
@@ -24,8 +24,8 @@ def cargar_css(nombre_archivo):
 
 cargar_css("style.css")
 
-st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
-st.markdown("**Desafío NASA:** Inteligencia geoespacial modular, autocompletado de lugares, análisis edáfico y reportes en PDF.")
+st.title(" Sistema de Decisión: Rotación de Cultivos")
+st.markdown("**Desafío NASA:** Inteligencia geoespacial modular, análisis edáfico, tarjeta de sostenibilidad e historial de lotes.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
 if 'lat' not in st.session_state:
@@ -38,11 +38,15 @@ if 'es_apto' not in st.session_state:
     st.session_state['es_apto'] = True
 if 'razon_no_apto' not in st.session_state:
     st.session_state['razon_no_apto'] = ""
+if 'historial_fincas' not in st.session_state:
+    st.session_state['historial_fincas'] = []
 
 # --- 2. BARRA LATERAL ---
 st.sidebar.header("🎛️ Panel de Control")
 
 with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
+    nombre_lote_input = st.text_input("Nombre del Lote / Finca:", value="Mi Finca Agrícola")
+    
     st.write("**🛰️ Ubicación Actual (GPS):**")
     location = streamlit_geolocation()
 
@@ -59,15 +63,14 @@ with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
             st.rerun()
 
     st.markdown("---")
-    metodo = st.radio("Opciones de búsqueda:", ["👆 Clic en el mapa", "🔍 Buscar con sugerencias", "📍 Coordenadas"])
+    metodo = st.radio("Opciones de búsqueda:", ["👆 Clic en el mapa", "🔍 Escribir nombre", "📍 Coordenadas"])
 
-    if metodo == "🔍 Buscar con sugerencias":
+    if metodo == "🔍 Escribir nombre":
         texto_busqueda = st.text_input("Escribe el lugar (Ej: Potosí, Pupiales):", "")
-        
         if len(texto_busqueda.strip()) >= 3:
             sugerencias = buscar_sugerencias(texto_busqueda)
             if sugerencias:
-                seleccion = st.selectbox("Selecciona de la lista:", list(sugerencias.keys()))
+                seleccion = st.selectbox("Selecciona:", list(sugerencias.keys()))
                 if st.button("Confirmar Ubicación"):
                     sel_lat, sel_lon = sugerencias[seleccion]
                     nombre, apto, razon = validar_terreno(sel_lat, sel_lon)
@@ -78,8 +81,7 @@ with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
                     st.session_state['razon_no_apto'] = razon
                     st.rerun()
             else:
-                st.caption("Buscando coincidencias en Colombia...")
-                
+                st.caption("Buscando coincidencias...")
     elif metodo == "📍 Coordenadas":
         nueva_lat = st.number_input("Latitud:", value=float(st.session_state['lat']), format="%.6f")
         nueva_lon = st.number_input("Longitud:", value=float(st.session_state['lon']), format="%.6f")
@@ -92,9 +94,8 @@ with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
             st.session_state['razon_no_apto'] = razon
             st.rerun()
     else:
-        st.info("Haz clic sobre tu lote directamente en el mapa interactivo.")
+        st.info("Haz clic sobre tu lote en el mapa.")
 
-    st.markdown("### 📌 Punto Seleccionado:")
     if st.session_state.get('es_apto', True):
         st.success(f"**Lugar:** {st.session_state['lugar']}")
     else:
@@ -104,6 +105,18 @@ with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
 with st.sidebar.expander("🗺️ Capa Cartográfica", expanded=False):
     tipo_mapa = st.selectbox("Selecciona:", ["Satélite", "Topográfico", "Político/Vial"])
 
+# NUEVO: Historial de Fincas Analizadas en la Barra Lateral
+with st.sidebar.expander("📂 Historial de Lotes Guardados", expanded=False):
+    if st.session_state['historial_fincas']:
+        for i, finca in enumerate(st.session_state['historial_fincas']):
+            st.markdown(f"**{i+1}. {finca['nombre']}**")
+            st.caption(f"Lugar: {finca['lugar']} | Temp: {finca['temp']}°C")
+        if st.button("Limpiar Historial"):
+            st.session_state['historial_fincas'] = []
+            st.rerun()
+    else:
+        st.info("Aún no hay lotes guardados. Ejecuta un análisis para guardar tu finca.")
+
 LAT = st.session_state['lat']
 LON = st.session_state['lon']
 
@@ -112,12 +125,9 @@ col1, col2 = st.columns([1.2, 1])
 
 with col2:
     st.subheader(f"Mapa Interactivo ({tipo_mapa})")
-    
-    # Renderizado usando el módulo externo map_view.py
     m = generar_mapa_interactivo(LAT, LON, st.session_state['lugar'], tipo_mapa, st.session_state.get('es_apto', True))
     mapa_datos = st_folium(m, width=500, height=450, key="mapa_dinamico")
     
-    # Captura de clic sincronizada con el panel izquierdo
     if mapa_datos and mapa_datos.get("last_clicked"):
         clic_lat = mapa_datos["last_clicked"]["lat"]
         clic_lon = mapa_datos["last_clicked"]["lng"]
@@ -156,18 +166,36 @@ with col1:
                         temp, precip, temp_min, suelo_info['tipo_suelo'], prioridad
                     )
                     
-                    st.session_state['ultimo_resultado'] = {
-                        "suelo": suelo_info, "clima": clima_info, "piso": piso,
-                        "rotacion": rotacion, "justificacion": justificacion, "riesgos": riesgos
+                    impacto = calcular_impacto_sostenibilidad(prioridad)
+                    
+                    resultado_actual = {
+                        "nombre": nombre_lote_input,
+                        "lugar": st.session_state['lugar'],
+                        "suelo": suelo_info, 
+                        "clima": clima_info, 
+                        "piso": piso,
+                        "rotacion": rotacion, 
+                        "justificacion": justificacion, 
+                        "riesgos": riesgos,
+                        "impacto": impacto,
+                        "temp": round(temp, 1)
                     }
+                    
+                    st.session_state['ultimo_resultado'] = resultado_actual
+                    
+                    # Guardar en historial si no está repetido exactamente
+                    if resultado_actual not in st.session_state['historial_fincas']:
+                        st.session_state['historial_fincas'].append(resultado_actual)
 
         if 'ultimo_resultado' in st.session_state:
             res = st.session_state['ultimo_resultado']
             suelo = res['suelo']
             clima = res['clima']
+            impacto = res['impacto']
             
             st.success("✅ Análisis completado con éxito")
             
+            # Métricas
             cm1, cm2, cm3 = st.columns(3)
             cm1.metric("🌡️ Temp. Media", f"{round(clima['temp_anual'], 1)} °C")
             cm2.metric("🌧️ Precipitación", f"{round(clima['precip_anual'], 1)} mm/d")
@@ -178,17 +206,24 @@ with col1:
             st.write(f"**{res['rotacion']}**")
             st.caption(f"**Justificación:** {res['justificacion']}")
             
+            # NUEVO: Tarjeta de Impacto Económico y Sostenibilidad
+            st.subheader("🌍 Impacto Económico y Sostenibilidad")
+            st.info(f"**Enfoque:** {impacto['titulo']}\n\n"
+                    f"- 💰 **Fertilizantes:** {impacto['fertilizante']}\n"
+                    f"- 💧 **Recurso Hídrico:** {impacto['agua']}\n"
+                    f"- 🌱 **Salud del Suelo:** {impacto['suelo']}")
+            
             st.subheader("⚠️ Alertas de Riesgo Climático")
             for r in res['riesgos']:
                 st.markdown(f"- {r}")
                 
             pdf_bytes = generar_reporte_pdf(
                 st.session_state['lugar'], LAT, LON, suelo, clima, 
-                res['piso'], res['rotacion'], res['justificacion'], res['riesgos']
+                res['piso'], res['rotacion'], res['justificacion'], res['riesgos'], impacto
             )
             
             st.download_button(
-                label="📥 Descargar Reporte Técnico (PDF)",
+                label="📥 Descargar Reporte Técnico en PDF",
                 data=pdf_bytes,
                 file_name=f"Reporte_Agroclimatico_{st.session_state['lugar'].replace(' ', '_')}.pdf",
                 mime="application/pdf"
