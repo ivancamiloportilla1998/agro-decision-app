@@ -5,7 +5,7 @@ import requests
 # Configuración de la página
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
-st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
+st.title("Sistema de Decisión: Rotación de Cultivos")
 st.write("Herramienta de análisis integrando datos climáticos en tiempo real y condiciones del suelo local.")
 
 # Coordenadas fijas para Ipiales, Nariño (pueden ser dinámicas en el futuro)
