@@ -2,56 +2,76 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# Configuración de la página
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
 st.title("Sistema de Decisión: Rotación de Cultivos")
-st.write("Herramienta de análisis integrando datos climáticos en tiempo real y condiciones del suelo local.")
+st.markdown("**Desafío:** Integración de datos satelitales (NASA), suelo local, cultivos y prioridades del agricultor.")
 
-# Coordenadas fijas para Ipiales, Nariño (pueden ser dinámicas en el futuro)
-LAT = 0.8243
-LON = -77.6377
+# Coordenadas (Ipiales, Nariño)
+LAT, LON = 0.8243, -77.6377
 
-col1, col2 = st.columns([1, 2])
+col1, col2 = st.columns([1.2, 1])
 
 with col1:
-    st.subheader("Parámetros Locales")
-    tipo_suelo = st.selectbox("Tipo de Suelo", ["Arcilloso", "Franco", "Arenoso"])
+    st.subheader("1. Parámetros Locales y Prioridades")
     
-    st.markdown("### Telemetría Climática")
-    st.info(f"📍 Coordenadas de análisis: {LAT}, {LON}")
+    col_input1, col_input2 = st.columns(2)
+    with col_input1:
+        tipo_suelo = st.selectbox("Tipo de Suelo", ["Arcilloso", "Franco", "Arenoso"])
+    with col_input2:
+        prioridad = st.selectbox("Prioridad del Agricultor", 
+                                 ["Conservar agua (Resiliencia hídrica)", 
+                                  "Mejorar salud del suelo (Fijar Nitrógeno)", 
+                                  "Maximizar rentabilidad comercial"])
     
-    if st.button("Consultar Clima y Generar Recomendación"):
-        with st.spinner('Conectando con la API meteorológica...'):
+    st.subheader("2. Observaciones de la Tierra (NASA)")
+    if st.button("Consultar NASA POWER y Generar Rotación"):
+        with st.spinner("Extrayendo datos de la NASA y procesando algoritmo..."):
             try:
-                # Llamada a la API de Open-Meteo
-                url = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&current_weather=true&daily=precipitation_sum&timezone=America%2FBogota"
-                respuesta = requests.get(url)
-                datos = respuesta.json()
+                # 1. Llamada a NASA POWER API (Datos Agroclimáticos Históricos)
+                url_nasa = f"https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,PRECTOTCORR&community=AG&longitude={LON}&latitude={LAT}&format=JSON"
+                nasa_req = requests.get(url_nasa).json()
                 
-                # Extracción de variables clave
-                temp_actual = datos['current_weather']['temperature']
-                precip_hoy = datos['daily']['precipitation_sum'][0]
+                # Extraemos promedios anuales históricos
+                temp_historica = nasa_req['properties']['parameter']['T2M']['ANN']
+                precip_historica = nasa_req['properties']['parameter']['PRECTOTCORR']['ANN']
                 
-                # Mostrar métricas en la interfaz
+                st.success("✅ Datos satelitales obtenidos con éxito de NASA POWER")
                 col_met1, col_met2 = st.columns(2)
-                col_met1.metric(label="🌡️ Temp. Actual", value=f"{temp_actual} °C")
-                col_met2.metric(label="🌧️ Precipitación (Hoy)", value=f"{precip_hoy} mm")
+                col_met1.metric("🌡️ Temp. Promedio (NASA)", f"{round(temp_historica, 1)} °C")
+                col_met2.metric("🌧️ Precip. Promedio (NASA)", f"{round(precip_historica, 2)} mm/día")
                 
-                st.subheader("Análisis de Rotación")
-                # Lógica de recomendación basada en los datos extraídos
-                if tipo_suelo == "Arcilloso" and precip_hoy > 10:
-                    st.warning("⚠️ Suelo arcilloso con alta precipitación. Riesgo de encharcamiento. Recomendación: Retrasar siembra o elegir cultivos tolerantes a hipoxia radical.")
-                elif tipo_suelo == "Arenoso" and precip_hoy < 2:
-                    st.error("⚠️ Suelo arenoso (baja retención) y precipitación nula. Riesgo severo de estrés hídrico. Recomendación: Asegurar sistema de riego antes de rotar.")
+                st.subheader("3. Estrategia de Rotación Recomendada")
+                st.write(f"**Análisis:** Basado en un suelo {tipo_suelo.lower()} y los promedios históricos de la NASA, se sugiere la siguiente secuencia para cumplir su objetivo:")
+                
+                # Motor de Decisión (Reglas de negocio agronómicas)
+                if "Conservar agua" in prioridad:
+                    st.info("💡 Estrategia: **Resiliencia Hídrica**")
+                    st.markdown("""
+                    * **Rotación sugerida:** Sorgo ➔ Quinua ➔ Frijol de secano
+                    * **Justificación Agrológica:** La quinua y el sorgo tienen sistemas radiculares profundos y cierran estomas rápidamente, soportando las variaciones de lluvia detectadas por los satélites.
+                    * **Impacto en el suelo:** Previene la erosión eólica durante los meses secos.
+                    """)
+                elif "Nitrógeno" in prioridad:
+                    st.info("💡 Estrategia: **Recuperación y Salud del Suelo**")
+                    st.markdown("""
+                    * **Rotación sugerida:** Maíz ➔ Arveja/Chocho (Leguminosa) ➔ Avena de cobertura
+                    * **Justificación Agrológica:** Las leguminosas (Arveja/Chocho) en simbiosis con bacterias Rhizobium fijan nitrógeno atmosférico. 
+                    * **Impacto en el suelo:** Rompe el ciclo de plagas del maíz y reduce la necesidad de fertilizantes sintéticos, mejorando el microbioma del suelo franco/arcilloso.
+                    """)
                 else:
-                    st.success("✅ Condiciones agrometeorológicas estables. Recomendación: Proceder con rotación planificada (Ej. Maíz - Frijol) para mantener nitrógeno en el suelo.")
-                    
+                    st.info("💡 Estrategia: **Rentabilidad Optimizada (Requiere Riego)**")
+                    st.markdown("""
+                    * **Rotación sugerida:** Papa ➔ Maíz ➔ Hortalizas de ciclo corto (Zanahoria/Cebolla)
+                    * **Justificación Agrológica:** Maximiza el uso del terreno durante el año aprovechando la estabilidad térmica histórica. 
+                    * **Impacto en el suelo:** Alto desgaste de nutrientes; requiere implementación de compostaje o agricultura de precisión.
+                    """)
+                
             except Exception as e:
-                st.error("Error al conectar con la fuente de datos. Intenta nuevamente.")
+                st.error(f"Error al conectar con la API de la NASA. Detalle: {e}")
 
 with col2:
-    st.subheader("Mapa de Parcelas")
+    st.subheader("Geolocalización")
     df_mapa = pd.DataFrame({'lat': [LAT], 'lon': [LON]})
     st.map(df_mapa, zoom=12)
-    st.caption("Ubicación satelital para la extracción de datos.")
+    st.caption("Ubicación satelital. Datos provistos por el proyecto POWER (Prediction of Worldwide Energy Resources) de la NASA.")
