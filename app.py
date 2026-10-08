@@ -4,9 +4,9 @@ import requests
 import folium
 from streamlit_folium import st_folium
 
-st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
+st.set_page_config(page_title="Gestión de Cultivos", page_icon="", layout="wide")
 
-st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
+st.title("Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío:** Integración de datos satelitales (NASA), suelo local, cultivos y prioridades del agricultor.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
