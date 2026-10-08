@@ -25,7 +25,7 @@ if 'razon_no_apto' not in st.session_state:
 def validar_terreno(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=14"
-        headers = {'User-Agent': 'AgroDecisionApp_Precision/7.0'} 
+        headers = {'User-Agent': 'AgroDecisionApp_Precision/8.0'} 
         response = requests.get(url, headers=headers)
         
         if response.status_code != 200:
@@ -62,6 +62,31 @@ def validar_terreno(lat, lon):
 # --- 3. BARRA LATERAL ---
 st.sidebar.header("📍 Ubicación del Terreno")
 
+# NUEVA FUNCIÓN: Botón rápido para detectar la ubicación actual por red
+if st.sidebar.button("📍 Detectar mi ubicación actual"):
+    try:
+        ip_data = requests.get("https://ipapi.co/json/", timeout=5).json()
+        if "latitude" in ip_data and "longitude" in ip_data:
+            nueva_lat = float(ip_data["latitude"])
+            nueva_lon = float(ip_data["longitude"])
+            ciudad = ip_data.get("city", "Mi ubicación")
+            region = ip_data.get("region", "")
+            nombre_detectado = f"{ciudad}, {region}" if region else ciudad
+            
+            nombre, apto, razon = validar_terreno(nueva_lat, nueva_lon)
+            st.session_state['lat'] = nueva_lat
+            st.session_state['lon'] = nueva_lon
+            st.session_state['lugar'] = nombre_detectado if nombre_detectado else nombre
+            st.session_state['es_apto'] = apto
+            st.session_state['razon_no_apto'] = razon
+            st.sidebar.success(f"¡Ubicación detectada: {st.session_state['lugar']}!")
+            st.rerun()
+        else:
+            st.sidebar.error("No se pudo determinar la ubicación automática.")
+    except Exception:
+        st.sidebar.error("Error al conectar con el servicio de geolocalización.")
+
+st.sidebar.markdown("---")
 metodo = st.sidebar.radio("¿Cómo deseas ubicar tu terreno?",
                           ["👆 Clic en el mapa", "🔍 Escribir el nombre", "📍 Ingresar coordenadas"])
 
@@ -77,7 +102,7 @@ if metodo == "🔍 Escribir el nombre":
                 nombre, apto, razon = validar_terreno(nueva_lat, nueva_lon)
                 st.session_state['lat'] = nueva_lat
                 st.session_state['lon'] = nueva_lon
-                st.session_state['lugar'] = nombre
+                st.session_state['lugar'] = nuevo_lugar
                 st.session_state['es_apto'] = apto
                 st.session_state['razon_no_apto'] = razon
                 st.rerun()
@@ -109,7 +134,7 @@ else: # 👆 Clic en el mapa
         
     st.sidebar.warning(f"**Latitud:** {st.session_state['lat']:.4f} \n\n**Longitud:** {st.session_state['lon']:.4f}")
 
-# --- 4. NUEVA FUNCIÓN: SELECTOR DE TIPO DE MAPA ---
+# --- 4. SELECTOR DE TIPO DE MAPA ---
 st.sidebar.markdown("---")
 st.sidebar.header("🗺️ Estilo de Capa Cartográfica")
 tipo_mapa = st.sidebar.selectbox(
@@ -130,9 +155,9 @@ col1, col2 = st.columns([1.2, 1])
 
 with col2:
     st.subheader(f"Mapa Interactivo ({tipo_mapa})")
-    st.caption("Cambia el tipo de capa en la barra lateral según lo que necesites analizar (relieve, vías o satélite).")
+    st.caption("Cambia el tipo de capa en la barra lateral según lo que necesites analizar.")
     
-    # Configuración de URLs y atributos según la selección del usuario
+    # CORREGIDO: URLs correctas para evitar errores de API KEY en mapas minimalistas
     if tipo_mapa == "Satélite (Alta Resolución)":
         tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
         attr_url = 'Esri &mdash; Source: Esri, i-cubed, USDA, USGS'
@@ -142,12 +167,12 @@ with col2:
     elif tipo_mapa == "Político y Vial (Calles y Límites)":
         tiles_url = 'openstreetmap'
         attr_url = None
-    else:
-        tiles_url = 'cartodbpositron'
-        attr_url = None
+    else: # Claro / Temático (Minimalista corregido con CartoDB Positron sin API Key)
+        tiles_url = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+        attr_url = '&copy; OpenStreetMap contributors &copy; CARTO'
 
     # Creación dinámica del mapa de Folium
-    if tiles_url in ['openstreetmap', 'cartodbpositron']:
+    if tiles_url == 'openstreetmap':
         m = folium.Map(location=[LAT, LON], zoom_start=14, tiles=tiles_url)
     else:
         m = folium.Map(location=[LAT, LON], zoom_start=14, tiles=tiles_url, attr=attr_url)
