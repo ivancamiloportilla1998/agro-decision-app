@@ -7,13 +7,48 @@ st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="
 st.title("Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío:** Integración de datos satelitales (NASA), suelo local, cultivos y prioridades del agricultor.")
 
-# Coordenadas (Ipiales, Nariño)
-LAT, LON = 0.8243, -77.6377
+# --- 1. CONFIGURACIÓN DE UBICACIÓN (Barra Lateral) ---
+st.sidebar.header("📍 Ubicación del Terreno")
+st.sidebar.write("Selecciona dónde vas a sembrar:")
 
+# Variables de estado para guardar la ubicación (por defecto Ipiales)
+if 'lat' not in st.session_state:
+    st.session_state['lat'] = 0.8243
+if 'lon' not in st.session_state:
+    st.session_state['lon'] = -77.6377
+
+metodo = st.sidebar.radio("Método de ingreso:", ["Buscar ciudad/lugar", "Coordenadas manuales"])
+
+if metodo == "Buscar ciudad/lugar":
+    lugar = st.sidebar.text_input("Escribe el lugar (Ej: Pupiales, Nariño):", "Ipiales, Colombia")
+    if st.sidebar.button("Buscar en el mapa"):
+        try:
+            # API gratuita de OpenStreetMap para buscar coordenadas por nombre
+            url_geo = f"https://nominatim.openstreetmap.org/search?q={lugar}&format=json&limit=1"
+            res = requests.get(url_geo, headers={'User-Agent': 'AgroDecisionApp/1.0'}).json()
+            if res:
+                st.session_state['lat'] = float(res[0]['lat'])
+                st.session_state['lon'] = float(res[0]['lon'])
+                st.sidebar.success("¡Ubicación encontrada!")
+            else:
+                st.sidebar.error("Lugar no encontrado. Intenta ser más específico.")
+        except Exception:
+            st.sidebar.error("Error al buscar la ubicación.")
+else:
+    # Cajas numéricas para ingreso manual preciso
+    st.session_state['lat'] = st.sidebar.number_input("Latitud:", value=st.session_state['lat'], format="%.4f")
+    st.session_state['lon'] = st.sidebar.number_input("Longitud:", value=st.session_state['lon'], format="%.4f")
+
+# Asignamos las variables finales
+LAT = st.session_state['lat']
+LON = st.session_state['lon']
+
+
+# --- 2. INTERFAZ PRINCIPAL ---
 col1, col2 = st.columns([1.2, 1])
 
 with col1:
-    st.subheader("1. Parámetros Locales y Prioridades")
+    st.subheader("Parámetros Locales y Prioridades")
     
     col_input1, col_input2 = st.columns(2)
     with col_input1:
@@ -24,15 +59,14 @@ with col1:
                                   "Mejorar salud del suelo (Fijar Nitrógeno)", 
                                   "Maximizar rentabilidad comercial"])
     
-    st.subheader("2. Observaciones de la Tierra (NASA)")
+    st.subheader("Observaciones de la Tierra (NASA)")
     if st.button("Consultar NASA POWER y Generar Rotación"):
-        with st.spinner("Extrayendo datos de la NASA y procesando algoritmo..."):
+        with st.spinner(f"Extrayendo datos de la NASA para coordenadas {LAT}, {LON}..."):
             try:
-                # 1. Llamada a NASA POWER API (Datos Agroclimáticos Históricos)
+                # Consulta dinámica usando las coordenadas del mapa
                 url_nasa = f"https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,PRECTOTCORR&community=AG&longitude={LON}&latitude={LAT}&format=JSON"
                 nasa_req = requests.get(url_nasa).json()
                 
-                # Extraemos promedios anuales históricos
                 temp_historica = nasa_req['properties']['parameter']['T2M']['ANN']
                 precip_historica = nasa_req['properties']['parameter']['PRECTOTCORR']['ANN']
                 
@@ -41,37 +75,24 @@ with col1:
                 col_met1.metric("🌡️ Temp. Promedio (NASA)", f"{round(temp_historica, 1)} °C")
                 col_met2.metric("🌧️ Precip. Promedio (NASA)", f"{round(precip_historica, 2)} mm/día")
                 
-                st.subheader("3. Estrategia de Rotación Recomendada")
+                st.subheader("Estrategia de Rotación Recomendada")
                 st.write(f"**Análisis:** Basado en un suelo {tipo_suelo.lower()} y los promedios históricos de la NASA, se sugiere la siguiente secuencia para cumplir su objetivo:")
                 
-                # Motor de Decisión (Reglas de negocio agronómicas)
                 if "Conservar agua" in prioridad:
                     st.info("💡 Estrategia: **Resiliencia Hídrica**")
-                    st.markdown("""
-                    * **Rotación sugerida:** Sorgo ➔ Quinua ➔ Frijol de secano
-                    * **Justificación Agrológica:** La quinua y el sorgo tienen sistemas radiculares profundos y cierran estomas rápidamente, soportando las variaciones de lluvia detectadas por los satélites.
-                    * **Impacto en el suelo:** Previene la erosión eólica durante los meses secos.
-                    """)
+                    st.markdown("* **Rotación:** Sorgo ➔ Quinua ➔ Frijol de secano\n* **Justificación:** Resisten variaciones de lluvia detectadas por los satélites y previenen erosión eólica.")
                 elif "Nitrógeno" in prioridad:
                     st.info("💡 Estrategia: **Recuperación y Salud del Suelo**")
-                    st.markdown("""
-                    * **Rotación sugerida:** Maíz ➔ Arveja/Chocho (Leguminosa) ➔ Avena de cobertura
-                    * **Justificación Agrológica:** Las leguminosas (Arveja/Chocho) en simbiosis con bacterias Rhizobium fijan nitrógeno atmosférico. 
-                    * **Impacto en el suelo:** Rompe el ciclo de plagas del maíz y reduce la necesidad de fertilizantes sintéticos, mejorando el microbioma del suelo franco/arcilloso.
-                    """)
+                    st.markdown("* **Rotación:** Maíz ➔ Arveja/Chocho (Leguminosa) ➔ Avena de cobertura\n* **Justificación:** Las leguminosas fijan nitrógeno, reduciendo fertilizantes y mejorando el microbioma del suelo.")
                 else:
                     st.info("💡 Estrategia: **Rentabilidad Optimizada (Requiere Riego)**")
-                    st.markdown("""
-                    * **Rotación sugerida:** Papa ➔ Maíz ➔ Hortalizas de ciclo corto (Zanahoria/Cebolla)
-                    * **Justificación Agrológica:** Maximiza el uso del terreno durante el año aprovechando la estabilidad térmica histórica. 
-                    * **Impacto en el suelo:** Alto desgaste de nutrientes; requiere implementación de compostaje o agricultura de precisión.
-                    """)
+                    st.markdown("* **Rotación:** Papa ➔ Maíz ➔ Hortalizas de ciclo corto (Zanahoria/Cebolla)\n* **Justificación:** Maximiza el uso del terreno. Alto desgaste de nutrientes; requiere compostaje.")
                 
             except Exception as e:
-                st.error(f"Error al conectar con la API de la NASA. Detalle: {e}")
+                st.error(f"Error al conectar con la API de la NASA. Asegúrate de que las coordenadas sean válidas. Detalle: {e}")
 
 with col2:
-    st.subheader("Geolocalización")
+    st.subheader("Mapa del Terreno")
     df_mapa = pd.DataFrame({'lat': [LAT], 'lon': [LON]})
-    st.map(df_mapa, zoom=12)
-    st.caption("Ubicación satelital. Datos provistos por el proyecto POWER (Prediction of Worldwide Energy Resources) de la NASA.")
+    st.map(df_mapa, zoom=11)
+    st.caption(f"Coordenadas actuales: {LAT}, {LON}")
