@@ -1,0 +1,53 @@
+/* --- PALETA DE COLORES AGRÍCOLAS MODERNOS --- */
+:root {
+    --primary-green: #2d6a4f;
+    --dark-green: #1b4332;
+    --light-green: #e8f5e9;
+    --accent-earth: #dda15e;
+    --text-dark: #2b2b2b;
+    --bg-app: #f4f9f4;
+}
+
+/* Fondo general de la aplicación */
+.stApp {
+    background-color: var(--bg-app);
+    color: var(--text-dark);
+}
+
+/* Títulos principales con verde oscuro elegante */
+h1, h2, h3 {
+    color: var(--dark-green) !important;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+/* Estilo personalizado para los botones */
+.stButton>button {
+    background-color: var(--primary-green) !important;
+    color: white !important;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+}
+
+.stButton>button:hover {
+    background-color: var(--dark-green) !important;
+    box-shadow: 0 6px 12px rgba(45, 106, 79, 0.2);
+}
+
+/* Tarjetas de métricas (Temperatura y Precipitación) */
+div[data-testid="metric-container"] {
+    background-color: white;
+    border: 1px solid #d8f3dc;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+}
+
+/* Personalización de la barra lateral */
+[data-testid="stSidebar"] {
+    background-color: #ffffff;
+    border-right: 1px solid #e2e8f0;
+}
