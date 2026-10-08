@@ -9,7 +9,7 @@ from streamlit_geolocation import streamlit_geolocation
 from nasa_api import obtener_datos_nasa
 from soil_api import obtener_suelo_soilgrids
 from agro_engine import evaluar_agroclima
-from report_generator import generar_reporte_texto
+from report_generator import generar_reporte_pdf
 
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
@@ -42,7 +42,7 @@ if 'razon_no_apto' not in st.session_state:
 def validar_terreno(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=14"
-        headers = {'User-Agent': 'AgroDecisionApp_Precision/14.0'} 
+        headers = {'User-Agent': 'AgroDecisionApp_Precision/15.0'} 
         response = requests.get(url, headers=headers)
         
         if response.status_code != 200:
@@ -70,7 +70,7 @@ def validar_terreno(lat, lon):
     except Exception:
         return "Terreno rural", True, ""
 
-# --- 3. BARRA LATERAL ---
+# --- 3. BARRA LATERAL CON MENÚS DESPLEGABLES ---
 st.sidebar.header("🎛️ Panel de Control")
 
 with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
@@ -194,7 +194,7 @@ with col1:
                         temp, precip, temp_min, suelo_info['tipo_suelo'], prioridad
                     )
                     
-                    # Guardar en session_state para el reporte descargable
+                    # Guardar en session_state para el reporte descargable en PDF
                     st.session_state['ultimo_resultado'] = {
                         "suelo": suelo_info, "clima": clima_info, "piso": piso,
                         "rotacion": rotacion, "justificacion": justificacion, "riesgos": riesgos
@@ -223,15 +223,15 @@ with col1:
             for r in res['riesgos']:
                 st.markdown(f"- {r}")
                 
-            # Botón de Descarga de Reporte Técnico
-            texto_reporte = generar_reporte_texto(
+            # Botón de Descarga de Reporte Técnico en PDF
+            pdf_bytes = generar_reporte_pdf(
                 st.session_state['lugar'], LAT, LON, suelo, clima, 
                 res['piso'], res['rotacion'], res['justificacion'], res['riesgos']
             )
             
             st.download_button(
-                label="📥 Descargar Reporte Técnico (TXT)",
-                data=texto_reporte,
-                file_name=f"Reporte_Agroclimatico_{st.session_state['lugar'].replace(' ', '_')}.txt",
-                mime="text/plain"
+                label="📥 Descargar Reporte Técnico (PDF)",
+                data=pdf_bytes,
+                file_name=f"Reporte_Agroclimatico_{st.session_state['lugar'].replace(' ', '_')}.pdf",
+                mime="application/pdf"
             )
