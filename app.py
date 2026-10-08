@@ -1,98 +1,123 @@
 import streamlit as st
 import pandas as pd
 import requests
+import folium
+from streamlit_folium import st_folium
 
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
-st.title("Sistema de Decisión: Rotación de Cultivos")
+st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío:** Integración de datos satelitales (NASA), suelo local, cultivos y prioridades del agricultor.")
 
-# --- 1. CONFIGURACIÓN DE UBICACIÓN (Barra Lateral) ---
-st.sidebar.header("📍 Ubicación del Terreno")
-st.sidebar.write("Selecciona dónde vas a sembrar:")
-
-# Variables de estado para guardar la ubicación (por defecto Ipiales)
+# --- 1. ESTADO DE LA APLICACIÓN ---
+# Guardamos la ubicación en la memoria de la sesión para que se actualice dinámicamente
 if 'lat' not in st.session_state:
     st.session_state['lat'] = 0.8243
 if 'lon' not in st.session_state:
     st.session_state['lon'] = -77.6377
+if 'lugar' not in st.session_state:
+    st.session_state['lugar'] = "Ipiales, Nariño"
 
-metodo = st.sidebar.radio("Método de ingreso:", ["Buscar ciudad/lugar", "Coordenadas manuales"])
+# --- 2. FUNCIÓN PARA TRADUCIR COORDENADAS A TEXTO ---
+def obtener_nombre_lugar(lat, lon):
+    try:
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
+        res = requests.get(url, headers={'User-Agent': 'AgroApp/1.0'}).json()
+        if 'address' in res:
+            ciudad = res['address'].get('city', res['address'].get('town', res['address'].get('village', res['address'].get('county', ''))))
+            estado = res['address'].get('state', '')
+            if ciudad and estado:
+                return f"{ciudad}, {estado}"
+            return res.get('display_name', "Ubicación rural").split(",")[0]
+        return "Ubicación en el mapa"
+    except:
+        return "Coordenadas seleccionadas"
 
-if metodo == "Buscar ciudad/lugar":
-    lugar = st.sidebar.text_input("Escribe el lugar (Ej: Pupiales, Nariño):", "Ipiales, Colombia")
-    if st.sidebar.button("Buscar en el mapa"):
-        try:
-            # API gratuita de OpenStreetMap para buscar coordenadas por nombre
-            url_geo = f"https://nominatim.openstreetmap.org/search?q={lugar}&format=json&limit=1"
-            res = requests.get(url_geo, headers={'User-Agent': 'AgroDecisionApp/1.0'}).json()
-            if res:
-                st.session_state['lat'] = float(res[0]['lat'])
-                st.session_state['lon'] = float(res[0]['lon'])
-                st.sidebar.success("¡Ubicación encontrada!")
-            else:
-                st.sidebar.error("Lugar no encontrado. Intenta ser más específico.")
-        except Exception:
-            st.sidebar.error("Error al buscar la ubicación.")
-else:
-    # Cajas numéricas para ingreso manual preciso
-    st.session_state['lat'] = st.sidebar.number_input("Latitud:", value=st.session_state['lat'], format="%.4f")
-    st.session_state['lon'] = st.sidebar.number_input("Longitud:", value=st.session_state['lon'], format="%.4f")
+# --- 3. BARRA LATERAL ---
+st.sidebar.header("📍 Ubicación del Terreno")
+st.sidebar.info("👆 Haz clic directamente en el mapa para actualizar la ubicación o usa el buscador abajo.")
 
-# Asignamos las variables finales
+# El campo de texto se llena automáticamente con la memoria de la sesión
+nuevo_lugar = st.sidebar.text_input("Lugar seleccionado:", value=st.session_state['lugar'])
+
+if st.sidebar.button("Buscar por texto"):
+    try:
+        url_geo = f"https://nominatim.openstreetmap.org/search?q={nuevo_lugar}&format=json&limit=1"
+        res = requests.get(url_geo, headers={'User-Agent': 'AgroApp/1.0'}).json()
+        if res:
+            st.session_state['lat'] = float(res[0]['lat'])
+            st.session_state['lon'] = float(res[0]['lon'])
+            st.session_state['lugar'] = nuevo_lugar
+            st.rerun() # Refresca la app para mover el mapa
+        else:
+            st.sidebar.error("No se encontró el lugar. Intenta hacer clic en el mapa.")
+    except Exception:
+        st.sidebar.error("Error de conexión al buscar.")
+
 LAT = st.session_state['lat']
 LON = st.session_state['lon']
 
-
-# --- 2. INTERFAZ PRINCIPAL ---
+# --- 4. INTERFAZ PRINCIPAL ---
 col1, col2 = st.columns([1.2, 1])
 
+with col2:
+    st.subheader("Mapa Interactivo")
+    
+    # Crear el mapa base centrado en las coordenadas actuales
+    m = folium.Map(location=[LAT, LON], zoom_start=11)
+    # Añadir un marcador rojo en la ubicación
+    folium.Marker([LAT, LON], popup=st.session_state['lugar'], icon=folium.Icon(color="red")).add_to(m)
+    
+    # Renderizar el mapa en Streamlit y capturar eventos
+    mapa_datos = st_folium(m, width=500, height=450)
+    
+    # LÓGICA DE CLIC: Si el usuario hace clic en el mapa
+    if mapa_datos and mapa_datos.get("last_clicked"):
+        clic_lat = mapa_datos["last_clicked"]["lat"]
+        clic_lon = mapa_datos["last_clicked"]["lng"]
+        
+        # Actualizamos variables y refrescamos si la ubicación cambió
+        if clic_lat != LAT or clic_lon != LON:
+            st.session_state['lat'] = clic_lat
+            st.session_state['lon'] = clic_lon
+            st.session_state['lugar'] = obtener_nombre_lugar(clic_lat, clic_lon)
+            st.rerun() # Esto actualiza el campo de texto de la izquierda instantáneamente
+
 with col1:
-    st.subheader("Parámetros Locales y Prioridades")
+    st.subheader("Parámetros y Análisis")
     
     col_input1, col_input2 = st.columns(2)
     with col_input1:
         tipo_suelo = st.selectbox("Tipo de Suelo", ["Arcilloso", "Franco", "Arenoso"])
     with col_input2:
-        prioridad = st.selectbox("Prioridad del Agricultor", 
+        prioridad = st.selectbox("Prioridad", 
                                  ["Conservar agua (Resiliencia hídrica)", 
-                                  "Mejorar salud del suelo (Fijar Nitrógeno)", 
-                                  "Maximizar rentabilidad comercial"])
+                                  "Mejorar salud (Fijar Nitrógeno)", 
+                                  "Maximizar rentabilidad"])
     
-    st.subheader("Observaciones de la Tierra (NASA)")
+    st.subheader("Observaciones Satelitales (NASA)")
     if st.button("Consultar NASA POWER y Generar Rotación"):
-        with st.spinner(f"Extrayendo datos de la NASA para coordenadas {LAT}, {LON}..."):
+        with st.spinner(f"Extrayendo datos históricos para {st.session_state['lugar']}..."):
             try:
-                # Consulta dinámica usando las coordenadas del mapa
                 url_nasa = f"https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,PRECTOTCORR&community=AG&longitude={LON}&latitude={LAT}&format=JSON"
                 nasa_req = requests.get(url_nasa).json()
                 
                 temp_historica = nasa_req['properties']['parameter']['T2M']['ANN']
                 precip_historica = nasa_req['properties']['parameter']['PRECTOTCORR']['ANN']
                 
-                st.success("✅ Datos satelitales obtenidos con éxito de NASA POWER")
                 col_met1, col_met2 = st.columns(2)
-                col_met1.metric("🌡️ Temp. Promedio (NASA)", f"{round(temp_historica, 1)} °C")
-                col_met2.metric("🌧️ Precip. Promedio (NASA)", f"{round(precip_historica, 2)} mm/día")
+                col_met1.metric("🌡️ Temp. Promedio", f"{round(temp_historica, 1)} °C")
+                col_met2.metric("🌧️ Precip. Promedio", f"{round(precip_historica, 2)} mm/día")
                 
-                st.subheader("Estrategia de Rotación Recomendada")
-                st.write(f"**Análisis:** Basado en un suelo {tipo_suelo.lower()} y los promedios históricos de la NASA, se sugiere la siguiente secuencia para cumplir su objetivo:")
-                
+                st.subheader("Estrategia Recomendada")
                 if "Conservar agua" in prioridad:
-                    st.info("💡 Estrategia: **Resiliencia Hídrica**")
-                    st.markdown("* **Rotación:** Sorgo ➔ Quinua ➔ Frijol de secano\n* **Justificación:** Resisten variaciones de lluvia detectadas por los satélites y previenen erosión eólica.")
+                    st.success("💡 **Resiliencia Hídrica:** Sorgo ➔ Quinua ➔ Frijol de secano")
+                    st.caption("Justificación: La quinua y el sorgo soportan las variaciones de lluvia y previenen erosión eólica en épocas secas.")
                 elif "Nitrógeno" in prioridad:
-                    st.info("💡 Estrategia: **Recuperación y Salud del Suelo**")
-                    st.markdown("* **Rotación:** Maíz ➔ Arveja/Chocho (Leguminosa) ➔ Avena de cobertura\n* **Justificación:** Las leguminosas fijan nitrógeno, reduciendo fertilizantes y mejorando el microbioma del suelo.")
+                    st.success("💡 **Salud del Suelo:** Maíz ➔ Arveja (Leguminosa) ➔ Avena de cobertura")
+                    st.caption("Justificación: Las leguminosas fijan nitrógeno atmosférico, reduciendo la dependencia de fertilizantes y mejorando el suelo.")
                 else:
-                    st.info("💡 Estrategia: **Rentabilidad Optimizada (Requiere Riego)**")
-                    st.markdown("* **Rotación:** Papa ➔ Maíz ➔ Hortalizas de ciclo corto (Zanahoria/Cebolla)\n* **Justificación:** Maximiza el uso del terreno. Alto desgaste de nutrientes; requiere compostaje.")
-                
+                    st.success("💡 **Rentabilidad Optimizada:** Papa ➔ Maíz ➔ Zanahoria/Cebolla")
+                    st.caption("Justificación: Alta rotación comercial. Requiere riego constante y enmiendas orgánicas para recuperar desgaste de nutrientes.")
             except Exception as e:
-                st.error(f"Error al conectar con la API de la NASA. Asegúrate de que las coordenadas sean válidas. Detalle: {e}")
-
-with col2:
-    st.subheader("Mapa del Terreno")
-    df_mapa = pd.DataFrame({'lat': [LAT], 'lon': [LON]})
-    st.map(df_mapa, zoom=11)
-    st.caption(f"Coordenadas actuales: {LAT}, {LON}")
+                st.error("Error al conectar con los servidores de la NASA. Intenta hacer clic en otra zona del mapa.")
