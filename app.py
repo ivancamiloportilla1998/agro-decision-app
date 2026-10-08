@@ -19,31 +19,47 @@ if 'lugar' not in st.session_state:
 if 'es_apto' not in st.session_state:
     st.session_state['es_apto'] = True
 
-# --- 2. FUNCIONES DE GEOCODIFICACIÓN (Con filtro urbano) ---
-def obtener_nombre_lugar(lat, lon):
+# --- 2. MOTOR ESTRICTO DE GEOCODIFICACIÓN ---
+def validar_terreno(lat, lon):
     try:
-        # zoom=18 permite detectar edificios específicos, calles y parques
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18"
-        headers = {'User-Agent': 'AgroDecisionApp_Col/3.0'}
-        res = requests.get(url, headers=headers).json()
+        # User agent único para evitar bloqueos del servidor
+        headers = {'User-Agent': 'AgroDecisionApp_Ivan_V4 (investigacion)'} 
+        response = requests.get(url, headers=headers)
         
+        if response.status_code != 200:
+            return "Error en satélite (No se puede verificar el terreno)", False
+            
+        res = response.json()
+        if 'error' in res:
+            return "Coordenadas inválidas", False
+            
         es_apto = True
         
-        # Filtro de infraestructura: Si el satélite detecta que es ciudad o edificio, lo marcamos como NO apto
+        # FILTRO URBANO ESTRICTO:
         if 'class' in res:
-            clases_urbanas = ['building', 'amenity', 'highway', 'leisure', 'shop', 'office', 'historic', 'man_made', 'craft']
-            if res['class'] in clases_urbanas:
+            clase = res['class']
+            tipo = res.get('type', '')
+            
+            # Infraestructura y vías
+            if clase in ['highway', 'building', 'amenity', 'leisure', 'shop', 'office', 'historic', 'man_made', 'craft', 'tourism', 'railway']:
+                es_apto = False
+            
+            # Uso de suelo no agrícola
+            if clase == 'landuse' and tipo in ['residential', 'commercial', 'retail', 'industrial', 'construction']:
                 es_apto = False
         
-        # Obtener un nombre legible
+        # Extraer el nombre exacto de la calle, edificio o zona
         if 'display_name' in res:
             partes = res['display_name'].split(',')
             nombre_lugar = f"{partes[0].strip()}, {partes[min(1, len(partes)-1)].strip()}"
             return nombre_lugar, es_apto
             
-        return "Zona Rural Detectada", True
-    except Exception:
-        return "Terreno agrícola", True
+        return "Zona Desconocida", False
+        
+    except Exception as e:
+        # Si hay cualquier error de red, NO asumimos que es agrícola
+        return "Fallo de conexión al verificar el suelo", False
 
 # --- 3. BARRA LATERAL (MENÚ DE UBICACIÓN) ---
 st.sidebar.header("📍 Ubicación del Terreno")
@@ -58,10 +74,13 @@ if metodo == "🔍 Escribir el nombre":
             url_geo = f"https://nominatim.openstreetmap.org/search?q={nuevo_lugar}&format=json&limit=1"
             res = requests.get(url_geo, headers={'User-Agent': 'AgroApp/1.0'}).json()
             if res:
-                st.session_state['lat'] = float(res[0]['lat'])
-                st.session_state['lon'] = float(res[0]['lon'])
-                st.session_state['lugar'] = nuevo_lugar
-                st.session_state['es_apto'] = True # Al buscar un municipio entero, asumimos que es para análisis general
+                nueva_lat = float(res[0]['lat'])
+                nueva_lon = float(res[0]['lon'])
+                nombre, apto = validar_terreno(nueva_lat, nueva_lon)
+                st.session_state['lat'] = nueva_lat
+                st.session_state['lon'] = nueva_lon
+                st.session_state['lugar'] = nombre
+                st.session_state['es_apto'] = apto
                 st.rerun()
             else:
                 st.sidebar.error("Lugar no encontrado.")
@@ -72,9 +91,9 @@ elif metodo == "📍 Ingresar coordenadas":
     nueva_lat = st.sidebar.number_input("Latitud:", value=float(st.session_state['lat']), format="%.6f")
     nueva_lon = st.sidebar.number_input("Longitud:", value=float(st.session_state['lon']), format="%.6f")
     if st.sidebar.button("Actualizar Mapa"):
+        nombre, apto = validar_terreno(nueva_lat, nueva_lon)
         st.session_state['lat'] = nueva_lat
         st.session_state['lon'] = nueva_lon
-        nombre, apto = obtener_nombre_lugar(nueva_lat, nueva_lon)
         st.session_state['lugar'] = nombre
         st.session_state['es_apto'] = apto
         st.rerun()
@@ -83,11 +102,10 @@ else: # 👆 Clic en el mapa
     st.sidebar.info("Haz clic en cualquier punto del mapa interactivo para seleccionarlo.")
     
     st.sidebar.markdown("### 📌 Terreno Seleccionado:")
-    # Cambiamos el diseño según si el lugar es apto para cultivar o no
     if st.session_state.get('es_apto', True):
         st.sidebar.success(f"**Lugar:** {st.session_state['lugar']}")
     else:
-        st.sidebar.error(f"⛔ **Zona Urbana / Construida:** \n{st.session_state['lugar']}\n\n*No apta para siembra.*")
+        st.sidebar.error(f"⛔ **Zona Urbana / Infraestructura:** \n{st.session_state['lugar']}\n\n*Terreno no apto para siembra.*")
         
     st.sidebar.warning(f"**Latitud:** {st.session_state['lat']:.4f} \n\n**Longitud:** {st.session_state['lon']:.4f}")
 
@@ -99,12 +117,11 @@ col1, col2 = st.columns([1.2, 1])
 
 with col2:
     st.subheader("Mapa Interactivo")
-    # Si el lugar no es apto, hacemos más zoom para que el usuario vea exactamente qué edificio seleccionó
-    m = folium.Map(location=[LAT, LON], zoom_start=15 if not st.session_state.get('es_apto', True) else 13)
+    # Zoom más cercano si es urbano para evidenciar el error
+    m = folium.Map(location=[LAT, LON], zoom_start=16 if not st.session_state.get('es_apto', True) else 13)
     
-    # Marcador Dinámico: Verde para terreno agrícola, Rojo para edificaciones
     color_marcador = "green" if st.session_state.get('es_apto', True) else "red"
-    icono = "leaf" if st.session_state.get('es_apto', True) else "info-sign"
+    icono = "leaf" if st.session_state.get('es_apto', True) else "remove-circle"
     
     folium.Marker([LAT, LON], popup=st.session_state['lugar'], icon=folium.Icon(color=color_marcador, icon=icono)).add_to(m)
     
@@ -115,9 +132,9 @@ with col2:
         clic_lon = mapa_datos["last_clicked"]["lng"]
         
         if abs(clic_lat - LAT) > 0.0001 or abs(clic_lon - LON) > 0.0001:
+            nombre, apto = validar_terreno(clic_lat, clic_lon)
             st.session_state['lat'] = clic_lat
             st.session_state['lon'] = clic_lon
-            nombre, apto = obtener_nombre_lugar(clic_lat, clic_lon)
             st.session_state['lugar'] = nombre
             st.session_state['es_apto'] = apto
             st.rerun()
@@ -135,9 +152,9 @@ with col1:
     
     st.subheader("Observaciones Satelitales (NASA)")
     
-    # RESTRICCIÓN DE ANÁLISIS: Si el terreno es un edificio, bloqueamos el botón de la NASA
     if not st.session_state.get('es_apto', True):
-        st.error("⚠️ Has seleccionado una edificación, vía pública o zona urbana. Por favor, selecciona un área rural válida en el mapa para habilitar el análisis satelital.")
+        # Bloqueo total si es zona urbana/carretera
+        st.error("⚠️ **ANÁLISIS BLOQUEADO:** Has seleccionado una edificación, vía pública o zona urbana. Selecciona un área rural o terreno abierto en el mapa para habilitar la simulación satelital.")
     else:
         if st.button("Consultar NASA POWER y Generar Rotación"):
             with st.spinner(f"Procesando datos para: {st.session_state['lugar']}..."):
