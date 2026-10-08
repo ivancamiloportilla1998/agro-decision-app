@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
 import requests
-import folium
 from streamlit_folium import st_folium
 from streamlit_geolocation import streamlit_geolocation
 
-# Importación de módulos especializados
+# Importación de módulos especializados y limpios
+from geo_service import validar_terreno, buscar_sugerencias
+from map_view import generar_mapa_interactivo
 from nasa_api import obtener_datos_nasa
 from soil_api import obtener_suelo_soilgrids
 from agro_engine import evaluar_agroclima
@@ -24,7 +25,7 @@ def cargar_css(nombre_archivo):
 cargar_css("style.css")
 
 st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
-st.markdown("**Desafío NASA:** Inteligencia geoespacial avanzada, autocompletado de lugares, análisis edáfico y reportes en PDF.")
+st.markdown("**Desafío NASA:** Inteligencia geoespacial modular, autocompletado de lugares, análisis edáfico y reportes en PDF.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
 if 'lat' not in st.session_state:
@@ -38,40 +39,7 @@ if 'es_apto' not in st.session_state:
 if 'razon_no_apto' not in st.session_state:
     st.session_state['razon_no_apto'] = ""
 
-# --- 2. VALIDACIÓN DE APTITUD Y NOMBRE DE LUGAR ---
-def validar_terreno(lat, lon):
-    try:
-        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=14"
-        headers = {'User-Agent': 'AgroDecisionApp_Precision/16.0'} 
-        response = requests.get(url, headers=headers)
-        
-        if response.status_code != 200:
-            return "Terreno agrícola", True, ""
-            
-        res = response.json()
-        if lat < -60 or lat > 80: 
-            return "Zona Polar / Inviable", False, "Latitud extrema no apta para agricultura."
-        if 'error' in res:
-            return "Ubicación en alta mar o remota", False, "No se detecta superficie terrestre (Océano o masa de agua)."
-            
-        if 'class' in res:
-            clase = res['class']
-            tipo = res.get('type', '')
-            if clase in ['water', 'waterway'] or tipo in ['ocean', 'sea', 'water', 'bay', 'strait', 'reef']:
-                return "Cuerpo de agua / Océano", False, "No se puede realizar agricultura en el mar o cuerpos de agua."
-            if clase in ['highway', 'building', 'railway'] and tipo not in ['track', 'path']:
-                return "Zona urbana / Infraestructura vial", False, "Infraestructura construida, no apta para siembra."
-
-        if 'display_name' in res:
-            partes = res['display_name'].split(',')
-            nombre = f"{partes[0].strip()}, {partes[min(1, len(partes)-1)].strip()}"
-            return nombre, True, ""
-            
-        return "Terreno abierto", True, ""
-    except Exception:
-        return f"Lat: {lat:.4f}, Lon: {lon:.4f}", True, ""
-
-# --- 3. BARRA LATERAL CON MENÚS DESPLEGABLES ---
+# --- 2. BARRA LATERAL ---
 st.sidebar.header("🎛️ Panel de Control")
 
 with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
@@ -94,32 +62,23 @@ with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
     metodo = st.radio("Opciones de búsqueda:", ["👆 Clic en el mapa", "🔍 Buscar con sugerencias", "📍 Coordenadas"])
 
     if metodo == "🔍 Buscar con sugerencias":
-        # Sistema de sugerencias en tiempo real (Autocompletado)
         texto_busqueda = st.text_input("Escribe el lugar (Ej: Potosí, Pupiales):", "")
         
-        if len(texto_busqueda) >= 3:
-            try:
-                # Buscamos priorizando Colombia para mayor precisión
-                url_sug = f"https://nominatim.openstreetmap.org/search?q={texto_busqueda},+Colombia&format=json&limit=5"
-                sug_res = requests.get(url_sug, headers={'User-Agent': 'AgroApp/2.0'}).json()
-                
-                if sug_res:
-                    opciones = {item['display_name']: (float(item['lat']), float(item['lon'])) for item in sug_res}
-                    seleccion = st.selectbox("Selecciona de la lista:", list(opciones.keys()))
-                    
-                    if st.button("Confirmar Ubicación"):
-                        sel_lat, sel_lon = opciones[seleccion]
-                        nombre, apto, razon = validar_terreno(sel_lat, sel_lon)
-                        st.session_state['lat'] = sel_lat
-                        st.session_state['lon'] = sel_lon
-                        st.session_state['lugar'] = nombre
-                        st.session_state['es_apto'] = apto
-                        st.session_state['razon_no_apto'] = razon
-                        st.rerun()
-                else:
-                    st.info("Escribe al menos 3 letras para ver sugerencias...")
-            except:
-                st.error("Error al buscar sugerencias.")
+        if len(texto_busqueda.strip()) >= 3:
+            sugerencias = buscar_sugerencias(texto_busqueda)
+            if sugerencias:
+                seleccion = st.selectbox("Selecciona de la lista:", list(sugerencias.keys()))
+                if st.button("Confirmar Ubicación"):
+                    sel_lat, sel_lon = sugerencias[seleccion]
+                    nombre, apto, razon = validar_terreno(sel_lat, sel_lon)
+                    st.session_state['lat'] = sel_lat
+                    st.session_state['lon'] = sel_lon
+                    st.session_state['lugar'] = nombre
+                    st.session_state['es_apto'] = apto
+                    st.session_state['razon_no_apto'] = razon
+                    st.rerun()
+            else:
+                st.caption("Buscando coincidencias en Colombia...")
                 
     elif metodo == "📍 Coordenadas":
         nueva_lat = st.number_input("Latitud:", value=float(st.session_state['lat']), format="%.6f")
@@ -148,24 +107,17 @@ with st.sidebar.expander("🗺️ Capa Cartográfica", expanded=False):
 LAT = st.session_state['lat']
 LON = st.session_state['lon']
 
-# --- 4. INTERFAZ PRINCIPAL ---
+# --- 3. INTERFAZ PRINCIPAL ---
 col1, col2 = st.columns([1.2, 1])
 
 with col2:
     st.subheader(f"Mapa Interactivo ({tipo_mapa})")
-    if tipo_mapa == "Satélite":
-        m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Esri')
-    elif tipo_mapa == "Topográfico":
-        m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attr='OpenTopoMap')
-    else:
-        m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='openstreetmap')
     
-    color_m = "green" if st.session_state.get('es_apto', True) else "red"
-    folium.Marker([LAT, LON], popup=st.session_state['lugar'], icon=folium.Icon(color=color_m)).add_to(m)
-    
+    # Renderizado usando el módulo externo map_view.py
+    m = generar_mapa_interactivo(LAT, LON, st.session_state['lugar'], tipo_mapa, st.session_state.get('es_apto', True))
     mapa_datos = st_folium(m, width=500, height=450, key="mapa_dinamico")
     
-    # CORREGIDO: Captura de clic y actualización inmediata del panel izquierdo
+    # Captura de clic sincronizada con el panel izquierdo
     if mapa_datos and mapa_datos.get("last_clicked"):
         clic_lat = mapa_datos["last_clicked"]["lat"]
         clic_lon = mapa_datos["last_clicked"]["lng"]
