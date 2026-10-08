@@ -7,7 +7,7 @@ from streamlit_folium import st_folium
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
 st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
-st.markdown("**Desafío:** Inteligencia geoespacial y agrometeorológica basada en pisos térmicos y datos de la NASA.")
+st.markdown("**Desafío:** Inteligencia geoespacial, pisos térmicos y selección de capas cartográficas para análisis agrícola.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
 if 'lat' not in st.session_state:
@@ -21,12 +21,11 @@ if 'es_apto' not in st.session_state:
 if 'razon_no_apto' not in st.session_state:
     st.session_state['razon_no_apto'] = ""
 
-# --- 2. VALIDACIÓN ESTRICTA DE APTITUD DE SUELO Y AGUA ---
+# --- 2. VALIDACIÓN DE APTITUD DE SUELO Y AGUA ---
 def validar_terreno(lat, lon):
     try:
-        # Consultamos OpenStreetMap con detalle para detectar agua, bosques protegidos o infraestructura
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=14"
-        headers = {'User-Agent': 'AgroDecisionApp_Precision/6.0'} 
+        headers = {'User-Agent': 'AgroDecisionApp_Precision/7.0'} 
         response = requests.get(url, headers=headers)
         
         if response.status_code != 200:
@@ -34,8 +33,7 @@ def validar_terreno(lat, lon):
             
         res = response.json()
         
-        # Validación de Océanos y Masas de Agua Globales (por coordenadas extremas o etiquetas)
-        if lat < -60 or lat > 80: # Zonas polares
+        if lat < -60 or lat > 80: 
             return "Zona Polar / Inviable", False, "Latitud extrema no apta para agricultura."
             
         if 'error' in res:
@@ -45,11 +43,9 @@ def validar_terreno(lat, lon):
             clase = res['class']
             tipo = res.get('type', '')
             
-            # Bloquear Cuerpos de Agua y Océanos
             if clase in ['water', 'waterway'] or tipo in ['ocean', 'sea', 'water', 'bay', 'strait', 'reef']:
                 return "Cuerpo de agua / Océano", False, "No se puede realizar agricultura en el mar o cuerpos de agua."
             
-            # Bloquear Zonas Urbanas densas / Carreteras principales
             if clase in ['highway', 'building', 'railway'] and tipo not in ['track', 'path']:
                 return "Zona urbana / Infraestructura vial", False, "Infraestructura construida, no apta para siembra."
 
@@ -61,14 +57,13 @@ def validar_terreno(lat, lon):
         return "Terreno abierto", True, ""
         
     except Exception:
-        # En caso de fallo de red en el mapa, permitimos la consulta pero advertimos
         return "Terreno rural", True, ""
 
 # --- 3. BARRA LATERAL ---
 st.sidebar.header("📍 Ubicación del Terreno")
 
 metodo = st.sidebar.radio("¿Cómo deseas ubicar tu terreno?",
-                          ["👆 Clic en el mapa satelital", "🔍 Escribir el nombre", "📍 Ingresar coordenadas"])
+                          ["👆 Clic en el mapa", "🔍 Escribir el nombre", "📍 Ingresar coordenadas"])
 
 if metodo == "🔍 Escribir el nombre":
     nuevo_lugar = st.sidebar.text_input("Lugar (Ej: Pupiales, Nariño):", value=st.session_state['lugar'])
@@ -114,29 +109,55 @@ else: # 👆 Clic en el mapa
         
     st.sidebar.warning(f"**Latitud:** {st.session_state['lat']:.4f} \n\n**Longitud:** {st.session_state['lon']:.4f}")
 
+# --- 4. NUEVA FUNCIÓN: SELECTOR DE TIPO DE MAPA ---
+st.sidebar.markdown("---")
+st.sidebar.header("🗺️ Estilo de Capa Cartográfica")
+tipo_mapa = st.sidebar.selectbox(
+    "Selecciona el tipo de mapa:",
+    [
+        "Satélite (Alta Resolución)",
+        "Topográfico y Relieve (Curvas de Nivel)",
+        "Político y Vial (Calles y Límites)",
+        "Claro / Temático (Minimalista)"
+    ]
+)
+
 LAT = st.session_state['lat']
 LON = st.session_state['lon']
 
-# --- 4. INTERFAZ PRINCIPAL ---
+# --- 5. INTERFAZ PRINCIPAL ---
 col1, col2 = st.columns([1.2, 1])
 
 with col2:
-    st.subheader("Mapa Satelital de Alta Resolución")
-    st.caption("Verifica visualmente que el punto esté sobre un área verde, potrero o cultivo (Evita océanos y ciudades).")
+    st.subheader(f"Mapa Interactivo ({tipo_mapa})")
+    st.caption("Cambia el tipo de capa en la barra lateral según lo que necesites analizar (relieve, vías o satélite).")
     
-    m = folium.Map(
-        location=[LAT, LON], 
-        zoom_start=14,
-        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attr='Esri &mdash; Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP'
-    )
+    # Configuración de URLs y atributos según la selección del usuario
+    if tipo_mapa == "Satélite (Alta Resolución)":
+        tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+        attr_url = 'Esri &mdash; Source: Esri, i-cubed, USDA, USGS'
+    elif tipo_mapa == "Topográfico y Relieve (Curvas de Nivel)":
+        tiles_url = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'
+        attr_url = 'OpenTopoMap (CC-BY-SA)'
+    elif tipo_mapa == "Político y Vial (Calles y Límites)":
+        tiles_url = 'openstreetmap'
+        attr_url = None
+    else:
+        tiles_url = 'cartodbpositron'
+        attr_url = None
+
+    # Creación dinámica del mapa de Folium
+    if tiles_url in ['openstreetmap', 'cartodbpositron']:
+        m = folium.Map(location=[LAT, LON], zoom_start=14, tiles=tiles_url)
+    else:
+        m = folium.Map(location=[LAT, LON], zoom_start=14, tiles=tiles_url, attr=attr_url)
     
     color_marcador = "green" if st.session_state.get('es_apto', True) else "red"
     icono_marc = "leaf" if st.session_state.get('es_apto', True) else "ban"
     
     folium.Marker([LAT, LON], popup=st.session_state['lugar'], icon=folium.Icon(color=color_marcador, icon=icono_marc)).add_to(m)
     
-    mapa_datos = st_folium(m, width=500, height=450, key="mapa_satelite")
+    mapa_datos = st_folium(m, width=500, height=450, key="mapa_dinamico")
     
     if mapa_datos and mapa_datos.get("last_clicked"):
         clic_lat = mapa_datos["last_clicked"]["lat"]
@@ -164,7 +185,6 @@ with col1:
     
     st.subheader("Observaciones Satelitales (NASA)")
     
-    # BLOQUEO SI NO ES APTO (Océanos, agua, ciudades)
     if not st.session_state.get('es_apto', True):
         st.error(f"⚠️ **ANÁLISIS BLOQUEADO:** {st.session_state['razon_no_apto']} Por favor, selecciona un terreno firme con potencial agrícola en el mapa.")
     else:
@@ -177,18 +197,18 @@ with col1:
                     temp_historica = nasa_req['properties']['parameter']['T2M']['ANN']
                     precip_historica = nasa_req['properties']['parameter']['PRECTOTCORR']['ANN']
                     
-                    # --- MOTOR INTELIGENTE DE PISOS TÉRMICOS ---
+                    # Motor inteligente de pisos térmicos
                     if temp_historica >= 24:
                         piso_termico = "Cálido (> 24 °C - Tierras bajas tropicales)"
                         if "Conservar agua" in prioridad:
                             rotacion = "Sorgo ➔ Yuca ➔ Fríjol caupí de secano"
-                            justificacion = "Cultivos altamente tolerantes a altas tasas de evapotranspiración en zonas cálidas."
+                            justificacion = "Cultivos tolerantes a altas tasas de evapotranspiración en zonas cálidas."
                         elif "Nitrógeno" in prioridad:
                             rotacion = "Maíz tropical ➔ Fríjol zaragoza ➔ Abono verde (Crotalaria)"
-                            justificacion = "Las leguminosas tropicales fijan nitrógeno rápidamente bajo alta radiación solar."
+                            justificacion = "Leguminosas tropicales fijan nitrógeno rápidamente bajo alta radiación solar."
                         else:
                             rotacion = "Plátano ➔ Cítricos ➔ Papaya / Frutales comerciales"
-                            justificacion = "Maximiza la rentabilidad comercial adaptada al trópico bajo."
+                            justificacion = "Rentabilidad comercial adaptada al trópico bajo."
                             
                     elif 18 <= temp_historica < 24:
                         piso_termico = "Templado / Medio (18 °C - 24 °C - Eje Cafetero / Piedemonte)"
@@ -197,7 +217,7 @@ with col1:
                             justificacion = "Secuencia óptima para retener humedad en suelos de ladera templada."
                         elif "Nitrógeno" in prioridad:
                             rotacion = "Café con sombrío ➔ Fríjol arbustivo ➔ Gandul (Fijador)"
-                            justificacion = "El gandul protege el suelo y aporta biomasa rica en nitrógeno al sistema."
+                            justificacion = "El gandul protege el suelo y aporta biomasa rica en nitrógeno."
                         else:
                             rotacion = "Aguacate Hass ➔ Café ➔ Tomate de árbol"
                             justificacion = "Alto valor comercial con requerimientos de suelos francos bien drenados."
@@ -216,9 +236,8 @@ with col1:
                     else:
                         piso_termico = "Muy Frío / Alta Montaña / Páramo (< 12 °C)"
                         rotacion = "Zona de Alta Fragilidad Ambiental (No recomendado para agricultura intensiva)"
-                        justificacion = "Las temperaturas bajo 12 °C y la alta humedad de páramo limitan el desarrollo agrícola y protegen fuentes hídricas."
+                        justificacion = "Temperaturas bajo 12 °C y alta humedad limitan la agricultura y protegen fuentes hídricas."
 
-                    # Mostrar Resultados en Pantalla
                     col_met1, col_met2 = st.columns(2)
                     col_met1.metric("🌡️ Temp. Promedio (NASA)", f"{round(temp_historica, 1)} °C")
                     col_met2.metric("🌧️ Precip. Promedio", f"{round(precip_historica, 2)} mm/día")
