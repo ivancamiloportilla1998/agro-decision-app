@@ -7,6 +7,16 @@ from streamlit_geolocation import streamlit_geolocation
 
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
+# --- FUNCIÓN PARA CARGAR EL ARCHIVO CSS EXTERNO ---
+def cargar_css(nombre_archivo):
+    try:
+        with open(nombre_archivo) as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        pass # Si el archivo aún no se crea, la app sigue funcionando normal
+
+cargar_css("style.css")
+
 st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío:** Inteligencia geoespacial, pisos térmicos y selección de capas cartográficas para análisis agrícola.")
 
@@ -127,7 +137,7 @@ else: # 👆 Clic en el mapa
         
     st.sidebar.warning(f"**Latitud:** {st.session_state['lat']:.4f} \n\n**Longitud:** {st.session_state['lon']:.4f}")
 
-# --- 4. SELECTOR DE TIPO DE MAPA (LIMPIO Y FUNCIONAL) ---
+# --- 4. SELECTOR DE TIPO DE MAPA ---
 st.sidebar.markdown("---")
 st.sidebar.header("🗺️ Estilo de Capa Cartográfica")
 tipo_mapa = st.sidebar.selectbox(
