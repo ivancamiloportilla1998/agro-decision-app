@@ -4,7 +4,7 @@ import pandas as pd
 # Configuración de la página
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
-st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
+st.title("Sistema de Decisión: Rotación de Cultivos")
 st.write("Herramienta de análisis integrando datos satelitales (NASA) y condiciones del suelo local.")
 
 # Creamos dos columnas para organizar la interfaz
