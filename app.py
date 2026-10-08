@@ -5,20 +5,20 @@ import folium
 from streamlit_folium import st_folium
 from streamlit_geolocation import streamlit_geolocation
 
-st.set_page_config(page_title="Gestión de Cultivos", page_icon="", layout="wide")
+st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
-# --- FUNCIÓN PARA CARGAR EL ARCHIVO CSS EXTERNO ---
+# --- CARGAR ESTILO CSS EXTERNO ---
 def cargar_css(nombre_archivo):
     try:
         with open(nombre_archivo) as f:
             st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
     except FileNotFoundError:
-        pass # Si el archivo aún no se crea, la app sigue funcionando normal
+        pass
 
 cargar_css("style.css")
 
-st.title(" Sistema de Decisión: Rotación de Cultivos")
-st.markdown("**Desafío:** Inteligencia geoespacial, pisos térmicos y selección de capas cartográficas para análisis agrícola.")
+st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
+st.markdown("**Desafío:** Inteligencia geoespacial, pisos térmicos y menús interactivos para análisis agrícola.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
 if 'lat' not in st.session_state:
@@ -36,7 +36,7 @@ if 'razon_no_apto' not in st.session_state:
 def validar_terreno(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=14"
-        headers = {'User-Agent': 'AgroDecisionApp_Precision/12.0'} 
+        headers = {'User-Agent': 'AgroDecisionApp_Precision/13.0'} 
         response = requests.get(url, headers=headers)
         
         if response.status_code != 200:
@@ -70,94 +70,94 @@ def validar_terreno(lat, lon):
     except Exception:
         return "Terreno rural", True, ""
 
-# --- 3. BARRA LATERAL ---
-st.sidebar.header("📍 Ubicación del Terreno")
+# --- 3. BARRA LATERAL CON MENÚS DESPLEGABLES (EXPANDERS) ---
+st.sidebar.header("🎛️ Panel de Control")
 
-st.sidebar.subheader("🛰️ Ubicación Actual (GPS)")
-st.sidebar.write("Haz clic para detectar tu posición exacta:")
-location = streamlit_geolocation()
+# Desplegable 1: Geolocalización GPS y Búsqueda
+with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
+    st.write("**🛰️ Ubicación Actual (GPS):**")
+    location = streamlit_geolocation()
 
-if location.get('latitude') and location.get('longitude'):
-    gps_lat = location['latitude']
-    gps_lon = location['longitude']
-    if gps_lat != st.session_state['lat'] or gps_lon != st.session_state['lon']:
-        nombre, apto, razon = validar_terreno(gps_lat, gps_lon)
-        st.session_state['lat'] = gps_lat
-        st.session_state['lon'] = gps_lon
-        st.session_state['lugar'] = nombre
-        st.session_state['es_apto'] = apto
-        st.session_state['razon_no_apto'] = razon
-        st.rerun()
+    if location.get('latitude') and location.get('longitude'):
+        gps_lat = location['latitude']
+        gps_lon = location['longitude']
+        if gps_lat != st.session_state['lat'] or gps_lon != st.session_state['lon']:
+            nombre, apto, razon = validar_terreno(gps_lat, gps_lon)
+            st.session_state['lat'] = gps_lat
+            st.session_state['lon'] = gps_lon
+            st.session_state['lugar'] = nombre
+            st.session_state['es_apto'] = apto
+            st.session_state['razon_no_apto'] = razon
+            st.rerun()
 
-st.sidebar.markdown("---")
-metodo = st.sidebar.radio("Otras opciones de búsqueda:",
-                          ["👆 Clic en el mapa", "🔍 Escribir el nombre", "📍 Ingresar coordenadas"])
+    st.markdown("---")
+    metodo = st.radio("Otras opciones de búsqueda:",
+                      ["👆 Clic en el mapa", "🔍 Escribir el nombre", "📍 Ingresar coordenadas"])
 
-if metodo == "🔍 Escribir el nombre":
-    nuevo_lugar = st.sidebar.text_input("Lugar (Ej: Pupiales, Nariño):", value=st.session_state['lugar'])
-    if st.sidebar.button("Buscar"):
-        try:
-            url_geo = f"https://nominatim.openstreetmap.org/search?q={nuevo_lugar}&format=json&limit=1"
-            res = requests.get(url_geo, headers={'User-Agent': 'AgroApp/1.0'}).json()
-            if res:
-                nueva_lat = float(res[0]['lat'])
-                nueva_lon = float(res[0]['lon'])
-                nombre, apto, razon = validar_terreno(nueva_lat, nueva_lon)
-                st.session_state['lat'] = nueva_lat
-                st.session_state['lon'] = nueva_lon
-                st.session_state['lugar'] = nuevo_lugar
-                st.session_state['es_apto'] = apto
-                st.session_state['razon_no_apto'] = razon
-                st.rerun()
-            else:
-                st.sidebar.error("Lugar no encontrado.")
-        except:
-            st.sidebar.error("Error al buscar.")
+    if metodo == "🔍 Escribir el nombre":
+        nuevo_lugar = st.text_input("Lugar (Ej: Pupiales, Nariño):", value=st.session_state['lugar'])
+        if st.button("Buscar Lugar"):
+            try:
+                url_geo = f"https://nominatim.openstreetmap.org/search?q={nuevo_lugar}&format=json&limit=1"
+                res = requests.get(url_geo, headers={'User-Agent': 'AgroApp/1.0'}).json()
+                if res:
+                    nueva_lat = float(res[0]['lat'])
+                    nueva_lon = float(res[0]['lon'])
+                    nombre, apto, razon = validar_terreno(nueva_lat, nueva_lon)
+                    st.session_state['lat'] = nueva_lat
+                    st.session_state['lon'] = nueva_lon
+                    st.session_state['lugar'] = nuevo_lugar
+                    st.session_state['es_apto'] = apto
+                    st.session_state['razon_no_apto'] = razon
+                    st.rerun()
+                else:
+                    st.error("Lugar no encontrado.")
+            except:
+                st.error("Error al buscar.")
 
-elif metodo == "📍 Ingresar coordenadas":
-    nueva_lat = st.sidebar.number_input("Latitud:", value=float(st.session_state['lat']), format="%.6f")
-    nueva_lon = st.sidebar.number_input("Longitud:", value=float(st.session_state['lon']), format="%.6f")
-    if st.sidebar.button("Actualizar Mapa"):
-        nombre, apto, razon = validar_terreno(nueva_lat, nueva_lon)
-        st.session_state['lat'] = nueva_lat
-        st.session_state['lon'] = nueva_lon
-        st.session_state['lugar'] = nombre
-        st.session_state['es_apto'] = apto
-        st.session_state['razon_no_apto'] = razon
-        st.rerun()
+    elif metodo == "📍 Ingresar coordenadas":
+        nueva_lat = st.number_input("Latitud:", value=float(st.session_state['lat']), format="%.6f")
+        nueva_lon = st.number_input("Longitud:", value=float(st.session_state['lon']), format="%.6f")
+        if st.button("Actualizar Coordenadas"):
+            nombre, apto, razon = validar_terreno(nueva_lat, nueva_lon)
+            st.session_state['lat'] = nueva_lat
+            st.session_state['lon'] = nueva_lon
+            st.session_state['lugar'] = nombre
+            st.session_state['es_apto'] = apto
+            st.session_state['razon_no_apto'] = razon
+            st.rerun()
 
-else: # 👆 Clic en el mapa
-    st.sidebar.info("Haz clic sobre tu lote o terreno agrícola en el mapa.")
-    st.sidebar.markdown("### 📌 Punto Seleccionado:")
-    
-    if st.session_state.get('es_apto', True):
-        st.sidebar.success(f"**Lugar:** {st.session_state['lugar']}")
     else:
-        st.sidebar.error(f"⛔ **Zona No Apta:** \n{st.session_state['lugar']}\n\n*{st.session_state['razon_no_apto']}*")
-        
-    st.sidebar.warning(f"**Latitud:** {st.session_state['lat']:.4f} \n\n**Longitud:** {st.session_state['lon']:.4f}")
+        st.info("Haz clic sobre tu lote o terreno agrícola directamente en el mapa.")
 
-# --- 4. SELECTOR DE TIPO DE MAPA ---
-st.sidebar.markdown("---")
-st.sidebar.header("🗺️ Estilo de Capa Cartográfica")
-tipo_mapa = st.sidebar.selectbox(
-    "Selecciona el tipo de mapa:",
-    [
-        "Satélite (Alta Resolución)",
-        "Topográfico y Relieve (Curvas de Nivel)",
-        "Político y Vial (Calles y Límites)"
-    ]
-)
+    st.markdown("### 📌 Punto Seleccionado:")
+    if st.session_state.get('es_apto', True):
+        st.success(f"**Lugar:** {st.session_state['lugar']}")
+    else:
+        st.error(f"⛔ **Zona No Apta:** \n{st.session_state['lugar']}\n\n*{st.session_state['razon_no_apto']}*")
+    
+    st.warning(f"**Lat:** {st.session_state['lat']:.4f} | **Lon:** {st.session_state['lon']:.4f}")
+
+# Desplegable 2: Estilo de Capa Cartográfica
+with st.sidebar.expander("🗺️ Estilo de Capa Cartográfica", expanded=False):
+    tipo_mapa = st.selectbox(
+        "Selecciona el tipo de mapa:",
+        [
+            "Satélite (Alta Resolución)",
+            "Topográfico y Relieve (Curvas de Nivel)",
+            "Político y Vial (Calles y Límites)"
+        ]
+    )
 
 LAT = st.session_state['lat']
 LON = st.session_state['lon']
 
-# --- 5. INTERFAZ PRINCIPAL ---
+# --- 4. INTERFAZ PRINCIPAL ---
 col1, col2 = st.columns([1.2, 1])
 
 with col2:
     st.subheader(f"Mapa Interactivo ({tipo_mapa})")
-    st.caption("Cambia el tipo de capa en la barra lateral según lo que necesites analizar.")
+    st.caption("Usa el mapa para explorar las condiciones espaciales y de relieve de tu lote.")
     
     if tipo_mapa == "Satélite (Alta Resolución)":
         m = folium.Map(
