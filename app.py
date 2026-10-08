@@ -5,13 +5,13 @@ import folium
 from streamlit_folium import st_folium
 from streamlit_geolocation import streamlit_geolocation
 
-# Importación de nuestros módulos especializados
+# Importación de módulos especializados
 from nasa_api import obtener_datos_nasa
 from soil_api import obtener_suelo_soilgrids
 from agro_engine import evaluar_agroclima
 from report_generator import generar_reporte_pdf
 
-st.set_page_config(page_title="Gestión de Cultivos", page_icon="", layout="wide")
+st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
 # --- CARGAR ESTILO CSS ---
 def cargar_css(nombre_archivo):
@@ -23,8 +23,8 @@ def cargar_css(nombre_archivo):
 
 cargar_css("style.css")
 
-st.title("Sistema de Decisión: Rotación de Cultivos")
-st.markdown("**Desafío NASA:** Inteligencia geoespacial avanzada, análisis edáfico automático, pisos térmicos y evaluación de riesgos.")
+st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
+st.markdown("**Desafío NASA:** Inteligencia geoespacial avanzada, autocompletado de lugares, análisis edáfico y reportes en PDF.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
 if 'lat' not in st.session_state:
@@ -38,15 +38,15 @@ if 'es_apto' not in st.session_state:
 if 'razon_no_apto' not in st.session_state:
     st.session_state['razon_no_apto'] = ""
 
-# --- 2. VALIDACIÓN DE APTITUD ---
+# --- 2. VALIDACIÓN DE APTITUD Y NOMBRE DE LUGAR ---
 def validar_terreno(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=14"
-        headers = {'User-Agent': 'AgroDecisionApp_Precision/15.0'} 
+        headers = {'User-Agent': 'AgroDecisionApp_Precision/16.0'} 
         response = requests.get(url, headers=headers)
         
         if response.status_code != 200:
-            return "Zona de análisis", True, ""
+            return "Terreno agrícola", True, ""
             
         res = response.json()
         if lat < -60 or lat > 80: 
@@ -64,11 +64,12 @@ def validar_terreno(lat, lon):
 
         if 'display_name' in res:
             partes = res['display_name'].split(',')
-            return f"{partes[0].strip()}, {partes[min(1, len(partes)-1)].strip()}", True, ""
+            nombre = f"{partes[0].strip()}, {partes[min(1, len(partes)-1)].strip()}"
+            return nombre, True, ""
             
         return "Terreno abierto", True, ""
     except Exception:
-        return "Terreno rural", True, ""
+        return f"Lat: {lat:.4f}, Lon: {lon:.4f}", True, ""
 
 # --- 3. BARRA LATERAL CON MENÚS DESPLEGABLES ---
 st.sidebar.header("🎛️ Panel de Control")
@@ -90,30 +91,40 @@ with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
             st.rerun()
 
     st.markdown("---")
-    metodo = st.radio("Otras opciones:", ["👆 Clic en el mapa", "🔍 Escribir nombre", "📍 Coordenadas"])
+    metodo = st.radio("Opciones de búsqueda:", ["👆 Clic en el mapa", "🔍 Buscar con sugerencias", "📍 Coordenadas"])
 
-    if metodo == "🔍 Escribir nombre":
-        nuevo_lugar = st.text_input("Lugar:", value=st.session_state['lugar'])
-        if st.button("Buscar"):
+    if metodo == "🔍 Buscar con sugerencias":
+        # Sistema de sugerencias en tiempo real (Autocompletado)
+        texto_busqueda = st.text_input("Escribe el lugar (Ej: Potosí, Pupiales):", "")
+        
+        if len(texto_busqueda) >= 3:
             try:
-                url_geo = f"https://nominatim.openstreetmap.org/search?q={nuevo_lugar}&format=json&limit=1"
-                res = requests.get(url_geo, headers={'User-Agent': 'AgroApp/1.0'}).json()
-                if res:
-                    nueva_lat = float(res[0]['lat'])
-                    nueva_lon = float(res[0]['lon'])
-                    nombre, apto, razon = validar_terreno(nueva_lat, nueva_lon)
-                    st.session_state['lat'] = nueva_lat
-                    st.session_state['lon'] = nueva_lon
-                    st.session_state['lugar'] = nuevo_lugar
-                    st.session_state['es_apto'] = apto
-                    st.session_state['razon_no_apto'] = razon
-                    st.rerun()
+                # Buscamos priorizando Colombia para mayor precisión
+                url_sug = f"https://nominatim.openstreetmap.org/search?q={texto_busqueda},+Colombia&format=json&limit=5"
+                sug_res = requests.get(url_sug, headers={'User-Agent': 'AgroApp/2.0'}).json()
+                
+                if sug_res:
+                    opciones = {item['display_name']: (float(item['lat']), float(item['lon'])) for item in sug_res}
+                    seleccion = st.selectbox("Selecciona de la lista:", list(opciones.keys()))
+                    
+                    if st.button("Confirmar Ubicación"):
+                        sel_lat, sel_lon = opciones[seleccion]
+                        nombre, apto, razon = validar_terreno(sel_lat, sel_lon)
+                        st.session_state['lat'] = sel_lat
+                        st.session_state['lon'] = sel_lon
+                        st.session_state['lugar'] = nombre
+                        st.session_state['es_apto'] = apto
+                        st.session_state['razon_no_apto'] = razon
+                        st.rerun()
+                else:
+                    st.info("Escribe al menos 3 letras para ver sugerencias...")
             except:
-                st.error("Error al buscar.")
+                st.error("Error al buscar sugerencias.")
+                
     elif metodo == "📍 Coordenadas":
         nueva_lat = st.number_input("Latitud:", value=float(st.session_state['lat']), format="%.6f")
         nueva_lon = st.number_input("Longitud:", value=float(st.session_state['lon']), format="%.6f")
-        if st.button("Actualizar"):
+        if st.button("Actualizar Coordenadas"):
             nombre, apto, razon = validar_terreno(nueva_lat, nueva_lon)
             st.session_state['lat'] = nueva_lat
             st.session_state['lon'] = nueva_lon
@@ -122,8 +133,9 @@ with st.sidebar.expander("📍 Ubicación del Terreno", expanded=True):
             st.session_state['razon_no_apto'] = razon
             st.rerun()
     else:
-        st.info("Haz clic sobre tu lote en el mapa.")
+        st.info("Haz clic sobre tu lote directamente en el mapa interactivo.")
 
+    st.markdown("### 📌 Punto Seleccionado:")
     if st.session_state.get('es_apto', True):
         st.success(f"**Lugar:** {st.session_state['lugar']}")
     else:
@@ -153,6 +165,7 @@ with col2:
     
     mapa_datos = st_folium(m, width=500, height=450, key="mapa_dinamico")
     
+    # CORREGIDO: Captura de clic y actualización inmediata del panel izquierdo
     if mapa_datos and mapa_datos.get("last_clicked"):
         clic_lat = mapa_datos["last_clicked"]["lat"]
         clic_lon = mapa_datos["last_clicked"]["lng"]
@@ -177,9 +190,7 @@ with col1:
     else:
         if st.button("🚀 Ejecutar Análisis Satelital NASA & SoilGrids"):
             with st.spinner("Conectando con APIs de la NASA e ISRIC (Suelos)..."):
-                # 1. Consulta automática de Suelo vía API
                 suelo_info = obtener_suelo_soilgrids(LAT, LON)
-                # 2. Consulta de Clima vía API NASA
                 clima_info = obtener_datos_nasa(LAT, LON)
                 
                 if not clima_info['exito']:
@@ -189,18 +200,15 @@ with col1:
                     precip = clima_info['precip_anual']
                     temp_min = clima_info['temp_min_anual']
                     
-                    # 3. Procesamiento en el motor agrónomo
                     piso, rotacion, justificacion, riesgos = evaluar_agroclima(
                         temp, precip, temp_min, suelo_info['tipo_suelo'], prioridad
                     )
                     
-                    # Guardar en session_state para el reporte descargable en PDF
                     st.session_state['ultimo_resultado'] = {
                         "suelo": suelo_info, "clima": clima_info, "piso": piso,
                         "rotacion": rotacion, "justificacion": justificacion, "riesgos": riesgos
                     }
 
-        # Mostrar resultados si ya se calcularon
         if 'ultimo_resultado' in st.session_state:
             res = st.session_state['ultimo_resultado']
             suelo = res['suelo']
@@ -208,7 +216,6 @@ with col1:
             
             st.success("✅ Análisis completado con éxito")
             
-            # Métricas
             cm1, cm2, cm3 = st.columns(3)
             cm1.metric("🌡️ Temp. Media", f"{round(clima['temp_anual'], 1)} °C")
             cm2.metric("🌧️ Precipitación", f"{round(clima['precip_anual'], 1)} mm/d")
@@ -223,7 +230,6 @@ with col1:
             for r in res['riesgos']:
                 st.markdown(f"- {r}")
                 
-            # Botón de Descarga de Reporte Técnico en PDF
             pdf_bytes = generar_reporte_pdf(
                 st.session_state['lugar'], LAT, LON, suelo, clima, 
                 res['piso'], res['rotacion'], res['justificacion'], res['riesgos']
