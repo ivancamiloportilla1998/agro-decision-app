@@ -79,6 +79,5 @@ def generar_reporte_pdf(lugar, lat, lon, suelo_info, clima_info, piso, rotacion,
         texto_riesgo = r.replace("⚠️", "[Alerta]").replace("✅", "[OK]")
         pdf.multi_cell(0, 6, limpiar(f"- {texto_riesgo}"))
         
-    # Retorna los bytes del PDF listos para descarga
-    return pdf.output()
-    
+    # Conversión explícita a bytes para Streamlit
+    return bytes(pdf.output())
