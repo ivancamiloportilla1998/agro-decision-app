@@ -6,21 +6,24 @@
     --accent-earth: #dda15e;
     --text-dark: #2b2b2b;
     --bg-app: #f4f9f4;
+    --card-bg: #ffffff;
+    --border-color: #d8f3dc;
 }
 
 /* Fondo general de la aplicación */
 .stApp {
     background-color: var(--bg-app);
     color: var(--text-dark);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Títulos principales con verde oscuro elegante */
+/* Títulos principales */
 h1, h2, h3 {
     color: var(--dark-green) !important;
-    font-family: 'Segoe UI', sans-serif;
+    font-weight: 700;
 }
 
-/* Estilo personalizado para los botones */
+/* Botones principales con efecto elegante */
 .stButton>button {
     background-color: var(--primary-green) !important;
     color: white !important;
@@ -28,26 +31,49 @@ h1, h2, h3 {
     border: none;
     font-weight: 600;
     padding: 0.5rem 1rem;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 6px rgba(45, 106, 79, 0.15);
     transition: all 0.3s ease;
 }
 
 .stButton>button:hover {
     background-color: var(--dark-green) !important;
-    box-shadow: 0 6px 12px rgba(45, 106, 79, 0.2);
+    box-shadow: 0 6px 12px rgba(45, 106, 79, 0.3);
+    transform: translateY(-1px);
 }
 
-/* Tarjetas de métricas (Temperatura y Precipitación) */
+/* Tarjetas de métricas (Clima) */
 div[data-testid="metric-container"] {
-    background-color: white;
-    border: 1px solid #d8f3dc;
-    padding: 15px;
-    border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(27, 67, 50, 0.04);
+    transition: transform 0.2s ease;
 }
 
-/* Personalización de la barra lateral */
+div[data-testid="metric-container"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(27, 67, 50, 0.08);
+}
+
+/* Barra lateral */
 [data-testid="stSidebar"] {
     background-color: #ffffff;
     border-right: 1px solid #e2e8f0;
+    padding-top: 1rem;
+}
+
+/* Estilo avanzado para los menús desplegables (Expanders con flecha) */
+div[data-testid="stExpander"] {
+    background-color: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+}
+
+div[data-testid="stExpander"]:hover {
+    border-color: var(--primary-green);
+    box-shadow: 0 4px 10px rgba(45, 106, 79, 0.08);
 }
