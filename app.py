@@ -9,7 +9,7 @@ st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="
 st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío:** Inteligencia geoespacial, pisos térmicos y selección de capas cartográficas para análisis agrícola.")
 
-# --- 1. ESTADO DE LA APLICACIÓN ---
+# --- 1. ESTADO DE LA APLICACIÓN (Predeterminado en Ipiales, Nariño) ---
 if 'lat' not in st.session_state:
     st.session_state['lat'] = 0.8243
 if 'lon' not in st.session_state:
@@ -25,7 +25,7 @@ if 'razon_no_apto' not in st.session_state:
 def validar_terreno(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=14"
-        headers = {'User-Agent': 'AgroDecisionApp_Precision/9.0'} 
+        headers = {'User-Agent': 'AgroDecisionApp_Precision/10.0'} 
         response = requests.get(url, headers=headers)
         
         if response.status_code != 200:
@@ -62,32 +62,6 @@ def validar_terreno(lat, lon):
 # --- 3. BARRA LATERAL ---
 st.sidebar.header("📍 Ubicación del Terreno")
 
-# Botón optimizado de geolocalización con IP y respaldo seguro
-if st.sidebar.button("📍 Detectar mi ubicación actual"):
-    try:
-        ip_res = requests.get("http://ip-api.com/json/", timeout=4)
-        ip_data = ip_res.json()
-        if ip_data.get("status") == "success":
-            nueva_lat = float(ip_data["lat"])
-            nueva_lon = float(ip_data["lon"])
-            ciudad = ip_data.get("city", "Ubicación actual")
-            region = ip_data.get("regionName", "")
-            nombre_detectado = f"{ciudad}, {region}" if region else ciudad
-            
-            nombre, apto, razon = validar_terreno(nueva_lat, nueva_lon)
-            st.session_state['lat'] = nueva_lat
-            st.session_state['lon'] = nueva_lon
-            st.session_state['lugar'] = nombre_detectado if nombre_detectado else nombre
-            st.session_state['es_apto'] = apto
-            st.session_state['razon_no_apto'] = razon
-            st.sidebar.success(f"¡Ubicación detectada: {st.session_state['lugar']}!")
-            st.rerun()
-        else:
-            st.sidebar.warning("No se pudo fijar por red. Usando coordenadas por defecto (Ipiales).")
-    except Exception:
-        st.sidebar.info("Servicio de red local no disponible. Selecciona el punto directamente en el mapa.")
-
-st.sidebar.markdown("---")
 metodo = st.sidebar.radio("¿Cómo deseas ubicar tu terreno?",
                           ["👆 Clic en el mapa", "🔍 Escribir el nombre", "📍 Ingresar coordenadas"])
 
@@ -158,7 +132,7 @@ with col2:
     st.subheader(f"Mapa Interactivo ({tipo_mapa})")
     st.caption("Cambia el tipo de capa en la barra lateral según lo que necesites analizar.")
     
-    # CORREGIDO: Uso de palabras clave nativas de Folium para evitar errores de API Key
+    # CORREGIDO: Mapas estables sin errores de API Key
     if tipo_mapa == "Satélite (Alta Resolución)":
         m = folium.Map(
             location=[LAT, LON], 
@@ -175,8 +149,8 @@ with col2:
         )
     elif tipo_mapa == "Político y Vial (Calles y Límites)":
         m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='openstreetmap')
-    else: # Claro / Temático (Minimalista oficial de CartoDB sin restricciones de llave)
-        m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='cartodbpositron')
+    else: # Claro / Temático (Minimalista usando el nombre nativo oficial de CartoDB)
+        m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='CartoDB positron')
     
     color_marcador = "green" if st.session_state.get('es_apto', True) else "red"
     icono_marc = "leaf" if st.session_state.get('es_apto', True) else "ban"
