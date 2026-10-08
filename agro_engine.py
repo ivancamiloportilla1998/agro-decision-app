@@ -1,5 +1,5 @@
 def evaluar_agroclima(temp, precip, temp_min, tipo_suelo, prioridad):
-    # 1. Pisos Térmicos
+    # 1. Pisos Térmicos y Rotaciones
     if temp >= 24:
         piso = "Cálido (> 24 °C - Tierras bajas tropicales)"
         if "Conservar agua" in prioridad:
@@ -51,3 +51,27 @@ def evaluar_agroclima(temp, precip, temp_min, tipo_suelo, prioridad):
         riesgos.append("✅ **Riesgo Climático Bajo:** Condiciones meteorológicas estables para la rotación.")
 
     return piso, rotacion, justificacion, riesgos
+
+def calcular_impacto_sostenibilidad(prioridad):
+    """Calcula el impacto económico y de sostenibilidad estimado según la prioridad."""
+    if "Nitrógeno" in prioridad:
+        return {
+            "titulo": "Fijación Biológica de Nitrógeno (FBN)",
+            "fertilizante": "Reducción estimada del 25% al 35% en la compra de urea sintética.",
+            "agua": "Uso eficiente del agua lluvia gracias a la cobertura vegetal viva y residuos de cosecha.",
+            "suelo": "Aumento progresivo de carbono orgánico y mejora de la microbiología edáfica."
+        }
+    elif "Conservar agua" in prioridad:
+        return {
+            "titulo": "Resiliencia Hídrica y Adaptación a Sequía",
+            "fertilizante": "Optimización en la absorción de nutrientes por raíces profundas.",
+            "agua": "Ahorro estimado de 3,500 a 5,000 litros de agua por hectárea/ciclo frente a cultivos tradicionales.",
+            "suelo": "Mitigación efectiva de la erosión eólica e hídrica en suelos de ladera o secano."
+        }
+    else:
+        return {
+            "titulo": "Intensificación Sostenible y Rentabilidad",
+            "fertilizante": "Uso racional y preciso de fertilizantes basado en la analítica agroclimática.",
+            "agua": "Gestión eficiente del recurso hídrico por etapas fenológicas del cultivo.",
+            "suelo": "Rotación comercial equilibrada con enmiendas orgánicas para evitar la fatiga del suelo."
+        }
