@@ -26,7 +26,7 @@ if 'razon_no_apto' not in st.session_state:
 def validar_terreno(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=14"
-        headers = {'User-Agent': 'AgroDecisionApp_Precision/11.0'} 
+        headers = {'User-Agent': 'AgroDecisionApp_Precision/12.0'} 
         response = requests.get(url, headers=headers)
         
         if response.status_code != 200:
@@ -63,9 +63,8 @@ def validar_terreno(lat, lon):
 # --- 3. BARRA LATERAL ---
 st.sidebar.header("📍 Ubicación del Terreno")
 
-# --- NUEVO: BOTÓN GPS DEL NAVEGADOR (Estilo Google Maps) ---
 st.sidebar.subheader("🛰️ Ubicación Actual (GPS)")
-st.sidebar.write("Haz clic en el botón para permitir que tu navegador detecte tu posición exacta:")
+st.sidebar.write("Haz clic para detectar tu posición exacta:")
 location = streamlit_geolocation()
 
 if location.get('latitude') and location.get('longitude'):
@@ -128,7 +127,7 @@ else: # 👆 Clic en el mapa
         
     st.sidebar.warning(f"**Latitud:** {st.session_state['lat']:.4f} \n\n**Longitud:** {st.session_state['lon']:.4f}")
 
-# --- 4. SELECTOR DE TIPO DE MAPA ---
+# --- 4. SELECTOR DE TIPO DE MAPA (LIMPIO Y FUNCIONAL) ---
 st.sidebar.markdown("---")
 st.sidebar.header("🗺️ Estilo de Capa Cartográfica")
 tipo_mapa = st.sidebar.selectbox(
@@ -136,8 +135,7 @@ tipo_mapa = st.sidebar.selectbox(
     [
         "Satélite (Alta Resolución)",
         "Topográfico y Relieve (Curvas de Nivel)",
-        "Político y Vial (Calles y Límites)",
-        "Claro / Temático (Minimalista)"
+        "Político y Vial (Calles y Límites)"
     ]
 )
 
@@ -151,7 +149,6 @@ with col2:
     st.subheader(f"Mapa Interactivo ({tipo_mapa})")
     st.caption("Cambia el tipo de capa en la barra lateral según lo que necesites analizar.")
     
-    # CORREGIDO: Mapas estables (El mapa minimalista usa CartoDB positron nativo sin requerir claves)
     if tipo_mapa == "Satélite (Alta Resolución)":
         m = folium.Map(
             location=[LAT, LON], 
@@ -166,10 +163,8 @@ with col2:
             tiles='https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
             attr='OpenTopoMap (CC-BY-SA)'
         )
-    elif tipo_mapa == "Político y Vial (Calles y Límites)":
+    else:
         m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='openstreetmap')
-    else: 
-        m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='CartoDB positron')
     
     color_marcador = "green" if st.session_state.get('es_apto', True) else "red"
     icono_marc = "leaf" if st.session_state.get('es_apto', True) else "ban"
