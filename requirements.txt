@@ -4,3 +4,4 @@ requests
 folium
 streamlit-folium
 streamlit-geolocation
+fpdf2
