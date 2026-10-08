@@ -5,7 +5,7 @@ import folium
 from streamlit_folium import st_folium
 from streamlit_geolocation import streamlit_geolocation
 
-st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
+st.set_page_config(page_title="Gestión de Cultivos", page_icon="", layout="wide")
 
 # --- FUNCIÓN PARA CARGAR EL ARCHIVO CSS EXTERNO ---
 def cargar_css(nombre_archivo):
@@ -17,7 +17,7 @@ def cargar_css(nombre_archivo):
 
 cargar_css("style.css")
 
-st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
+st.title(" Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío:** Inteligencia geoespacial, pisos térmicos y selección de capas cartográficas para análisis agrícola.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
