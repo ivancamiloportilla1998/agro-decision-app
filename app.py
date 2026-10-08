@@ -3,13 +3,14 @@ import pandas as pd
 import requests
 import folium
 from streamlit_folium import st_folium
+from streamlit_geolocation import streamlit_geolocation
 
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
 st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío:** Inteligencia geoespacial, pisos térmicos y selección de capas cartográficas para análisis agrícola.")
 
-# --- 1. ESTADO DE LA APLICACIÓN (Predeterminado en Ipiales, Nariño) ---
+# --- 1. ESTADO DE LA APLICACIÓN ---
 if 'lat' not in st.session_state:
     st.session_state['lat'] = 0.8243
 if 'lon' not in st.session_state:
@@ -25,7 +26,7 @@ if 'razon_no_apto' not in st.session_state:
 def validar_terreno(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=14"
-        headers = {'User-Agent': 'AgroDecisionApp_Precision/10.0'} 
+        headers = {'User-Agent': 'AgroDecisionApp_Precision/11.0'} 
         response = requests.get(url, headers=headers)
         
         if response.status_code != 200:
@@ -62,7 +63,25 @@ def validar_terreno(lat, lon):
 # --- 3. BARRA LATERAL ---
 st.sidebar.header("📍 Ubicación del Terreno")
 
-metodo = st.sidebar.radio("¿Cómo deseas ubicar tu terreno?",
+# --- NUEVO: BOTÓN GPS DEL NAVEGADOR (Estilo Google Maps) ---
+st.sidebar.subheader("🛰️ Ubicación Actual (GPS)")
+st.sidebar.write("Haz clic en el botón para permitir que tu navegador detecte tu posición exacta:")
+location = streamlit_geolocation()
+
+if location.get('latitude') and location.get('longitude'):
+    gps_lat = location['latitude']
+    gps_lon = location['longitude']
+    if gps_lat != st.session_state['lat'] or gps_lon != st.session_state['lon']:
+        nombre, apto, razon = validar_terreno(gps_lat, gps_lon)
+        st.session_state['lat'] = gps_lat
+        st.session_state['lon'] = gps_lon
+        st.session_state['lugar'] = nombre
+        st.session_state['es_apto'] = apto
+        st.session_state['razon_no_apto'] = razon
+        st.rerun()
+
+st.sidebar.markdown("---")
+metodo = st.sidebar.radio("Otras opciones de búsqueda:",
                           ["👆 Clic en el mapa", "🔍 Escribir el nombre", "📍 Ingresar coordenadas"])
 
 if metodo == "🔍 Escribir el nombre":
@@ -132,7 +151,7 @@ with col2:
     st.subheader(f"Mapa Interactivo ({tipo_mapa})")
     st.caption("Cambia el tipo de capa en la barra lateral según lo que necesites analizar.")
     
-    # CORREGIDO: Mapas estables sin errores de API Key
+    # CORREGIDO: Mapas estables (El mapa minimalista usa CartoDB positron nativo sin requerir claves)
     if tipo_mapa == "Satélite (Alta Resolución)":
         m = folium.Map(
             location=[LAT, LON], 
@@ -149,7 +168,7 @@ with col2:
         )
     elif tipo_mapa == "Político y Vial (Calles y Límites)":
         m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='openstreetmap')
-    else: # Claro / Temático (Minimalista usando el nombre nativo oficial de CartoDB)
+    else: 
         m = folium.Map(location=[LAT, LON], zoom_start=14, tiles='CartoDB positron')
     
     color_marcador = "green" if st.session_state.get('es_apto', True) else "red"
@@ -197,7 +216,6 @@ with col1:
                     temp_historica = nasa_req['properties']['parameter']['T2M']['ANN']
                     precip_historica = nasa_req['properties']['parameter']['PRECTOTCORR']['ANN']
                     
-                    # Motor inteligente de pisos térmicos
                     if temp_historica >= 24:
                         piso_termico = "Cálido (> 24 °C - Tierras bajas tropicales)"
                         if "Conservar agua" in prioridad:
