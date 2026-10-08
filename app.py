@@ -6,7 +6,7 @@ from streamlit_folium import st_folium
 
 st.set_page_config(page_title="Gestión de Cultivos", page_icon="🌱", layout="wide")
 
-st.title("🌱 Sistema de Decisión: Rotación de Cultivos")
+st.title(" Sistema de Decisión: Rotación de Cultivos")
 st.markdown("**Desafío:** Integración de datos satelitales (NASA), suelo local, cultivos y prioridades del agricultor.")
 
 # --- 1. ESTADO DE LA APLICACIÓN ---
@@ -27,15 +27,14 @@ def obtener_nombre_lugar(lat, lon):
             estado = res['address'].get('state', '')
             if ciudad and estado:
                 return f"{ciudad}, {estado}"
-            return res.get('display_name', "Ubicación rural").split(",")[0]
-        return "Coordenadas seleccionadas"
+            return res.get('display_name', "Zona rural").split(",")[0]
+        return "Ubicación en el mapa"
     except:
-        return f"Lat: {lat:.4f}, Lon: {lon:.4f}"
+        return "Ubicación seleccionada"
 
 # --- 3. BARRA LATERAL (MENÚ DE UBICACIÓN) ---
 st.sidebar.header("📍 Ubicación del Terreno")
 
-# Selector del método de ingreso
 metodo = st.sidebar.radio("¿Cómo deseas ubicar tu terreno?",
                           ["👆 Clic en el mapa", "🔍 Escribir el nombre", "📍 Ingresar coordenadas"])
 
@@ -66,8 +65,9 @@ elif metodo == "📍 Ingresar coordenadas":
 
 else: # 👆 Clic en el mapa
     st.sidebar.info("Haz clic en cualquier punto del mapa interactivo para seleccionarlo.")
-    # Mostramos el lugar actual en una caja de texto deshabilitada para evitar conflictos
-    st.sidebar.text_input("Lugar seleccionado actualmente:", value=st.session_state['lugar'], disabled=True)
+    # AÑADIDO: Dos campos separados para mostrar el nombre y las coordenadas al mismo tiempo
+    st.sidebar.text_input("Lugar seleccionado:", value=st.session_state['lugar'], disabled=True)
+    st.sidebar.text_input("Coordenadas exactas:", value=f"Lat: {st.session_state['lat']:.4f}, Lon: {st.session_state['lon']:.4f}", disabled=True)
 
 LAT = st.session_state['lat']
 LON = st.session_state['lon']
@@ -80,15 +80,12 @@ with col2:
     m = folium.Map(location=[LAT, LON], zoom_start=11)
     folium.Marker([LAT, LON], popup=st.session_state['lugar'], icon=folium.Icon(color="red")).add_to(m)
     
-    # Renderizamos el mapa añadiendo un 'key' único para estabilizar el componente
     mapa_datos = st_folium(m, width=500, height=450, key="mapa_agro")
     
-    # Captura del clic en el mapa
     if mapa_datos and mapa_datos.get("last_clicked"):
         clic_lat = mapa_datos["last_clicked"]["lat"]
         clic_lon = mapa_datos["last_clicked"]["lng"]
         
-        # Validación con tolerancia para evitar bucles de recarga
         if abs(clic_lat - LAT) > 0.0001 or abs(clic_lon - LON) > 0.0001:
             st.session_state['lat'] = clic_lat
             st.session_state['lon'] = clic_lon
